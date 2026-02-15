@@ -753,5 +753,29 @@ def api_latest_round():
     return jsonify({"latest_round_id": latest_round_id})
 
 
+@app.post("/api/manual-scrape-next")
+def api_manual_scrape_next():
+    try:
+        with psycopg.connect(DEFAULT_DB_URL) as conn:
+            with conn.transaction():
+                scraper_ensure_schema(conn)
+            next_round_id = get_next_round_id(conn)
+            url = DEFAULT_URL_TEMPLATE.format(round_id=next_round_id)
+            round_data = parse_round_data(url)
+            with conn.transaction():
+                upsert_round(conn, round_data)
+        return jsonify(
+            {
+                "ok": True,
+                "next_round_id": next_round_id,
+                "round_id": round_data.round_id,
+                "inserted_players": len(round_data.players),
+                "message": f"Inserted round {round_data.round_id}.",
+            }
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)

@@ -821,6 +821,11 @@ export default {
         return json(result);
       }
 
+      if (p === "/api/manual-scrape-next" && request.method === "POST") {
+        const result = await runAutomaticUpdate(env);
+        return json(result);
+      }
+
       if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
         return env.ASSETS.fetch(request);
       }
