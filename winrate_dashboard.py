@@ -276,6 +276,16 @@ def get_player_counts(
     return points
 
 
+def get_latest_round_id(db_url: str) -> int | None:
+    with psycopg.connect(db_url) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT MAX(round_id) FROM rounds;")
+            row = cur.fetchone()
+    if not row or row[0] is None:
+        return None
+    return int(row[0])
+
+
 def get_jobs(
     db_url: str,
     start_round: int,
@@ -735,6 +745,12 @@ def api_my_games():
             "games": games,
         }
     )
+
+
+@app.get("/api/latest-round")
+def api_latest_round():
+    latest_round_id = get_latest_round_id(DEFAULT_DB_URL)
+    return jsonify({"latest_round_id": latest_round_id})
 
 
 if __name__ == "__main__":

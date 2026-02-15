@@ -521,6 +521,14 @@ async function getNextRoundId(db) {
   return Number(rows?.[0]?.next_round_id || 1);
 }
 
+async function getLatestRoundId(db) {
+  const rows = await db.unsafe(
+    `SELECT COALESCE(MAX(round_id), 0)::int AS latest_round_id FROM public.rounds;`
+  );
+  const latest = Number(rows?.[0]?.latest_round_id || 0);
+  return latest > 0 ? latest : null;
+}
+
 async function checkReplayPage(roundId) {
   const replayUrl = `https://replays.iterator.systems/replay/rmc14/alamo/${roundId}`;
   const resp = await fetch(replayUrl, { method: "GET" });
@@ -836,6 +844,11 @@ export default {
           getMyGames(db, start, end, q)
         );
         return json({ start_round: start, end_round: end, query: q, games });
+      }
+
+      if (p === "/api/latest-round") {
+        const latestRoundId = await withDb(env, (db) => getLatestRoundId(db));
+        return json({ latest_round_id: latestRoundId });
       }
 
       if (env.ASSETS && typeof env.ASSETS.fetch === "function") {

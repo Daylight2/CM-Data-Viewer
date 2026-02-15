@@ -130,6 +130,26 @@
             margin: 14px 0 10px;
         }
 
+        .top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .site-title {
+            color: var(--muted);
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+
+        .latest-round {
+            color: var(--muted);
+            font-size: 0.92rem;
+            text-align: right;
+            white-space: nowrap;
+        }
+
         .tab-btn {
             background: #0f1a22;
             border: 1px solid var(--border);
@@ -212,13 +232,44 @@
             .jobs-grid {
                 grid-template-columns: 1fr;
             }
+
+            .top-row {
+                flex-direction: column;
+            }
+
+            .latest-round {
+                text-align: left;
+            }
+        }
+
+        .footer-note {
+            margin-top: 12px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .footer-note a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .footer-note a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
 <div class="wrap">
     <div class="panel">
-        <h1>Winrate by Round Range</h1>
+        <div class="top-row">
+            <div>
+                <div class="site-title">Stats! For Rouny's Marine Corps, SS14</div>
+                <h1>Winrate by Round Range</h1>
+            </div>
+            <div class="latest-round" id="latest-round-id">Latest stored round ID: ...</div>
+        </div>
         <form id="range-form">
             <label>
                 Start round
@@ -342,6 +393,10 @@
                 <tbody id="my-games-body"></tbody>
             </table>
         </div>
+    </div>
+    <div class="footer-note">
+        <div>Not affiliated with wizden or RMC leadership</div>
+        <div>Massive thanks to Simyon and his <a href="https://replays.iterator.systems/" target="_blank" rel="noopener noreferrer">replay browser project</a> for making this possible!</div>
     </div>
 </div>
 <script src="{{ url_for('static', filename='app.js') }}"></script>

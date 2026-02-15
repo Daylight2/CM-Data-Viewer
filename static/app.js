@@ -343,6 +343,24 @@ async function fetchMapWinrates(startRound, endRound, characterName, characterJo
     return payload.maps;
 }
 
+async function fetchLatestRoundId() {
+    const latestEl = document.getElementById("latest-round-id");
+    if (!latestEl) {
+        return;
+    }
+    try {
+        const resp = await fetch("/api/latest-round");
+        const payload = await resp.json();
+        if (!resp.ok) {
+            throw new Error(payload.error || "Failed to load latest round ID.");
+        }
+        const latest = payload.latest_round_id;
+        latestEl.textContent = `Latest stored round ID: ${latest === null ? "N/A" : latest}`;
+    } catch {
+        latestEl.textContent = "Latest stored round ID: unavailable";
+    }
+}
+
 function renderMyGames(games, query) {
     const tbody = document.getElementById("my-games-body");
     const meta = document.getElementById("my-games-meta");
@@ -602,6 +620,7 @@ async function fetchAndRender(startRound, endRound, characterName, characterJob)
 
     const mapWinrates = await fetchMapWinrates(startRound, endRound, characterName, characterJob);
     renderMapWinrates(mapWinrates);
+    await fetchLatestRoundId();
 }
 
 document.getElementById("range-form").addEventListener("submit", async (event) => {
@@ -777,5 +796,6 @@ fetchAndRender(
 ).catch((err) => {
     document.getElementById("error").textContent = err.message;
 });
+fetchLatestRoundId().catch(() => {});
 updateSortHeaderLabels();
 updateMapSortHeaderLabels();
