@@ -536,8 +536,11 @@ async function checkReplayPage(roundId) {
     return { exists: false, replayUrl };
   }
   const html = await resp.text();
-  const hasNotFound = /not found|404/i.test(html);
-  return { exists: !hasNotFound, replayUrl, html };
+  const hasRoundId = /<p>\s*Round ID:\s*\d+\s*<\/p>/i.test(html);
+  const hasReplayButton = /id="buttonPlayers-\d+"/i.test(html);
+  const hasDownloadLink = /<a[^>]*>\s*Download\s*<\/a>/i.test(html);
+  const isReplayPage = hasRoundId || hasReplayButton || hasDownloadLink;
+  return { exists: isReplayPage, replayUrl, html };
 }
 
 async function scrapeRound(roundId) {
