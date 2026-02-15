@@ -9,11 +9,11 @@
   },
   "routes": [
     {
-      "pattern": "rmc14stats.com/*",
+      "pattern": "rmc14stats.com",
       "custom_domain": true
     },
     {
-      "pattern": "www.rmc14stats.com/*",
+      "pattern": "www.rmc14stats.com",
       "custom_domain": true
     }
   ]
