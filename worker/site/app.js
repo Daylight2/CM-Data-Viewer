@@ -324,18 +324,16 @@ async function fetchLatestRoundId() {
     }
 }
 
-function getSecondsUntilNextFiveMinuteMark() {
+function getSecondsUntilNextHalfHour() {
     const now = new Date();
     const next = new Date(now);
     next.setMilliseconds(0);
     next.setSeconds(0);
-    const minute = now.getMinutes();
-    const nextMinuteMark = Math.ceil((minute + 1) / 5) * 5;
-    if (nextMinuteMark >= 60) {
+    if (now.getMinutes() < 30) {
+        next.setMinutes(30);
+    } else {
         next.setHours(next.getHours() + 1);
         next.setMinutes(0);
-    } else {
-        next.setMinutes(nextMinuteMark);
     }
     return Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
 }
@@ -357,13 +355,13 @@ function startNextRoundCountdown() {
     };
 
     const render = () => {
-        const totalSeconds = getSecondsUntilNextFiveMinuteMark();
+        const totalSeconds = getSecondsUntilNextHalfHour();
         const mm = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
         const ss = String(totalSeconds % 60).padStart(2, "0");
         el.textContent = `Checking for new round in ${mm}:${ss}`;
 
         if (totalSeconds <= 1) {
-            const bucket = Math.floor(Date.now() / 300000);
+            const bucket = Math.floor(Date.now() / 1800000);
             if (bucket !== lastAutoUpdateBucket) {
                 lastAutoUpdateBucket = bucket;
                 triggerAutoUpdateNow();
@@ -662,24 +660,6 @@ document.getElementById("tab-winrates-btn").addEventListener("click", () => swit
 document.getElementById("tab-map-winrates-btn").addEventListener("click", () => switchTab("map-winrates"));
 document.getElementById("tab-jobs-btn").addEventListener("click", () => switchTab("jobs"));
 document.getElementById("tab-my-games-btn").addEventListener("click", () => switchTab("my-games"));
-const manualScrapeBtn = document.getElementById("manual-scrape-btn");
-if (manualScrapeBtn) {
-    manualScrapeBtn.addEventListener("click", async () => {
-        const statusEl = document.getElementById("manual-scrape-status");
-        statusEl.textContent = "Checking...";
-        try {
-            const resp = await fetch("/api/manual-scrape-next", { method: "POST" });
-            const payload = await resp.json();
-            if (!resp.ok) {
-                throw new Error(payload.error || payload.message || "Manual scrape failed.");
-            }
-            statusEl.textContent = payload.message || "Done.";
-            await fetchLatestRoundId();
-        } catch (err) {
-            statusEl.textContent = `Error: ${err.message}`;
-        }
-    });
-}
 document.getElementById("my-games-search-btn").addEventListener("click", async () => {
     try {
         await fetchAndRenderMyGames();

@@ -150,25 +150,6 @@
             white-space: nowrap;
         }
 
-        .manual-tools {
-            margin-top: 8px;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 6px;
-        }
-
-        .manual-tools button {
-            padding: 7px 10px;
-            font-size: 0.85rem;
-        }
-
-        .manual-status {
-            color: var(--muted);
-            font-size: 0.85rem;
-            max-width: 260px;
-            text-align: right;
-        }
 
         .tab-btn {
             background: #0f1a22;
@@ -288,13 +269,7 @@
                 <div class="site-title">Stats! For Rouny's Marine Corps, SS14</div>
                 <h1>Winrate by Round Range</h1>
             </div>
-            <div>
-                <div class="latest-round" id="latest-round-id">Latest stored round ID: ...</div>
-                <div class="manual-tools">
-                    <button type="button" id="manual-scrape-btn">Check New Rounds Now</button>
-                    <div class="manual-status" id="manual-scrape-status"></div>
-                </div>
-            </div>
+            <div class="latest-round" id="latest-round-id">Latest stored round ID: ...</div>
         </div>
         <form id="range-form">
             <label>
@@ -424,7 +399,7 @@
         <div>Made by Daylight</div>
         <div>Not affiliated with Wizden or RMC leadership</div>
         <div>Massive thanks to Simyon and his <a href="https://replays.iterator.systems/" target="_blank" rel="noopener noreferrer">replay browser project</a> for making this possible!</div>
-        <div id="next-round-check-countdown">Checking for new round in 05:00</div>
+        <div id="next-round-check-countdown">Checking for new round in 30:00</div>
     </div>
 </div>
 <script src="/app.js"></script>
