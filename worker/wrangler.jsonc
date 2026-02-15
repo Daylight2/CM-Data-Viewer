@@ -1,0 +1,10 @@
+{
+  "name": "cm-data-viewer",
+  "main": "src/index.js",
+  "compatibility_date": "2026-02-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./site",
+    "binding": "ASSETS"
+  }
+}

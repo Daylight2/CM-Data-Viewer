@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "dev": "wrangler dev --assets ./site",
+    "deploy": "wrangler deploy --assets ./site"
   },
   "dependencies": {
     "postgres": "^3.4.5"
