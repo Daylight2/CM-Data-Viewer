@@ -498,7 +498,16 @@ export default {
         return json({ start_round: start, end_round: end, query: q, games });
       }
 
-      return env.ASSETS.fetch(request);
+      if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+        return env.ASSETS.fetch(request);
+      }
+      return new Response(
+        "Worker is live, but static assets are not bound. Redeploy with wrangler.jsonc assets.directory set to worker/site.",
+        {
+          status: 500,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }
+      );
     } catch (err) {
       return json({ error: String(err?.message || err) }, 500);
     }
