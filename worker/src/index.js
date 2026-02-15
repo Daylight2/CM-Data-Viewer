@@ -7,6 +7,7 @@ const RESULT_BUCKETS = [
   "xeno major",
   "draw",
 ];
+const AUTO_MAX_EMPTY_CHECKS = 10;
 
 const RESULT_TEXT_TO_BUCKET = [
   [
@@ -23,6 +24,14 @@ const RESULT_TEXT_TO_BUCKET = [
   ],
   [
     "With no prey left to hunt, the xenonids roam freely. The intruders are gone. They have scattered, been slain, or have fled, leaving the hive unchallenged.",
+    "xeno major",
+  ],
+  [
+    "All of the xenos were wiped out!",
+    "marine major",
+  ],
+  [
+    "All of the marines were wiped out!",
     "xeno major",
   ],
   [
@@ -619,6 +628,89 @@ async function upsertRound(db, round) {
   }
 }
 
+async function ensureScraperStateTable(db) {
+  await db.unsafe(
+    `
+      CREATE TABLE IF NOT EXISTS public.scraper_state (
+        key TEXT PRIMARY KEY,
+        consecutive_misses INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
+  );
+}
+
+async function getConsecutiveMisses(db) {
+  const rows = await db.unsafe(
+    `SELECT consecutive_misses FROM public.scraper_state WHERE key = 'next_round_poll';`
+  );
+  if (!rows.length) return 0;
+  return Number(rows[0].consecutive_misses || 0);
+}
+
+async function setConsecutiveMisses(db, misses) {
+  await db.unsafe(
+    `
+      INSERT INTO public.scraper_state (key, consecutive_misses, updated_at)
+      VALUES ('next_round_poll', $1, NOW())
+      ON CONFLICT (key)
+      DO UPDATE SET
+        consecutive_misses = EXCLUDED.consecutive_misses,
+        updated_at = NOW();
+    `,
+    [misses]
+  );
+}
+
+async function runAutomaticUpdate(env) {
+  const state = await withDb(env, async (db) => {
+    await ensureScraperStateTable(db);
+    const misses = await getConsecutiveMisses(db);
+    const nextRoundId =
+      misses >= AUTO_MAX_EMPTY_CHECKS ? null : await getNextRoundId(db);
+    return { misses, nextRoundId };
+  });
+
+  if (state.nextRoundId == null) {
+    return {
+      status: "stopped",
+      consecutive_misses: state.misses,
+      max_empty_checks: AUTO_MAX_EMPTY_CHECKS,
+      message: `Auto-scraper paused after ${AUTO_MAX_EMPTY_CHECKS} consecutive misses.`,
+    };
+  }
+
+  const scraped = await scrapeRound(state.nextRoundId);
+  if (!scraped.exists) {
+    const nextMisses = state.misses + 1;
+    await withDb(env, async (db) => {
+      await ensureScraperStateTable(db);
+      await setConsecutiveMisses(db, nextMisses);
+    });
+    return {
+      status: "no_new_round",
+      next_round_id: state.nextRoundId,
+      consecutive_misses: nextMisses,
+      max_empty_checks: AUTO_MAX_EMPTY_CHECKS,
+      message: `No new round at ${state.nextRoundId}. Miss ${nextMisses}/${AUTO_MAX_EMPTY_CHECKS}.`,
+    };
+  }
+
+  await withDb(env, async (db) => {
+    await ensureScraperStateTable(db);
+    await upsertRound(db, scraped.round);
+    await setConsecutiveMisses(db, 0);
+  });
+  return {
+    status: "inserted",
+    next_round_id: scraped.round.round_id,
+    inserted_players: (scraped.round.players || []).length,
+    replay_url: scraped.replay_url,
+    consecutive_misses: 0,
+    message: `Inserted round ${scraped.round.round_id}.`,
+  };
+}
+
 async function getMyGames(db, startRound, endRound, queryText) {
   const q = parseSearchQuery(queryText);
   if (!q.value) return [];
@@ -746,25 +838,6 @@ export default {
         return json({ start_round: start, end_round: end, query: q, games });
       }
 
-      if (p === "/api/manual-scrape-next" && request.method === "POST") {
-        const nextRoundId = await withDb(env, (db) => getNextRoundId(db));
-        const scraped = await scrapeRound(nextRoundId);
-        if (!scraped.exists) {
-          return json({
-            next_round_id: nextRoundId,
-            replay_url: scraped.replay_url,
-            message: `No new round found at ${nextRoundId}.`,
-          });
-        }
-        await withDb(env, (db) => upsertRound(db, scraped.round));
-        return json({
-          next_round_id: nextRoundId,
-          replay_url: scraped.replay_url,
-          inserted_players: (scraped.round.players || []).length,
-          message: `Inserted round ${nextRoundId}.`,
-        });
-      }
-
       if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
         return env.ASSETS.fetch(request);
       }
@@ -778,5 +851,12 @@ export default {
     } catch (err) {
       return json({ error: String(err?.message || err) }, 500);
     }
+  },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(
+      runAutomaticUpdate(env).then((result) => {
+        console.log("[auto-update]", JSON.stringify(result));
+      })
+    );
   },
 };

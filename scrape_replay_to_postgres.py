@@ -31,6 +31,14 @@ RESULT_TEXT_TO_BUCKET = [
         "xeno major",
     ),
     (
+        "All of the xenos were wiped out!",
+        "marine major",
+    ),
+    (
+        "All of the marines were wiped out!",
+        "xeno major",
+    ),
+    (
         "The xenonids hijacked the metal bird, forcing their way into the metal hive to seek the rest of the hosts. However, the marines fought back, eliminating the threat in orbit. Though the ship is safe and evacuated, the surface remains overrun, and the xenonids endure.",
         "xeno minor",
     ),

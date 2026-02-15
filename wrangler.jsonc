@@ -7,6 +7,9 @@
     "directory": "worker/site",
     "binding": "ASSETS"
   },
+  "triggers": {
+    "crons": ["*/30 * * * *"]
+  },
   "routes": [
     {
       "pattern": "rmc14stats.com",
