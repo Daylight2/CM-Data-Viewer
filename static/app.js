@@ -117,7 +117,7 @@ function renderPlayersChart(points) {
         return sampled;
     }
 
-    const chartPoints = downsampleSeries(points, 250);
+    const chartPoints = downsampleSeries(points, 100);
     const ctx = document.getElementById("players-chart").getContext("2d");
     const labels = chartPoints.map((p) => p.round_id);
     const values = chartPoints.map((p) => p.player_count);
