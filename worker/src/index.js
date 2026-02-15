@@ -8,6 +8,41 @@ const RESULT_BUCKETS = [
   "draw",
 ];
 
+const RESULT_TEXT_TO_BUCKET = [
+  [
+    "The last of the xenonids were purged. It's safe to breathe again... for now.",
+    "marine major",
+  ],
+  [
+    "With the queen eliminated, the xenonid hive collapses. For now, the area is safe.",
+    "marine major",
+  ],
+  [
+    "The queen has been eliminated, and with her, the hive's coordination falters. The few remaining xenonids pose little threat, but the war is not over.",
+    "marine minor",
+  ],
+  [
+    "With no prey left to hunt, the xenonids roam freely. The intruders are gone. They have scattered, been slain, or have fled, leaving the hive unchallenged.",
+    "xeno major",
+  ],
+  [
+    "The xenonids hijacked the metal bird, forcing their way into the metal hive to seek the rest of the hosts. However, the marines fought back, eliminating the threat in orbit. Though the ship is safe and evacuated, the surface remains overrun, and the xenonids endure.",
+    "xeno minor",
+  ],
+  [
+    "The xenonids hijacked the metal bird and entered the metal hive, igniting a brutal battle in the sky. In the chaos, the vessel lost control and crashed into the surface before everyone could evacuate. All hands were lost. Yet, the surface remains overrun, and the xenonids endure.",
+    "xeno minor",
+  ],
+  [
+    "Neither marines nor xenonids survived the carnage. The battlefield lies silent, a graveyard for both.",
+    "draw",
+  ],
+  [
+    "ARES 3.2 Log Error: Operation records are missing or corrupted. Please contact support with error code 404 for further assistance.",
+    "error",
+  ],
+];
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -33,6 +68,93 @@ function normalizeCharacterSearch(value) {
   return value
     .replace(/(\([^)]*\)|\[[^\]]*\])/g, (m) => m.replace(/[0-9]+/g, ""))
     .trim();
+}
+
+function normalizeText(value) {
+  if (!value) return "";
+  return String(value)
+    .replace(/\u2019|\u00b4|`/g, "'")
+    .replace(/\[(?:\/)?(?:color|bold)[^\]]*\]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function classifyResult(roundEndText) {
+  if (!roundEndText) return null;
+  const normalizedEnd = normalizeText(roundEndText);
+  for (const [message, bucket] of RESULT_TEXT_TO_BUCKET) {
+    if (normalizedEnd.includes(normalizeText(message))) {
+      return bucket;
+    }
+  }
+  return null;
+}
+
+function firstMatch(text, regex) {
+  const m = text.match(regex);
+  return m && m[1] ? m[1].trim() : null;
+}
+
+function parseRoundPageHtml(html, fallbackRoundId) {
+  const mapName = firstMatch(html, /<p>\s*Maps:\s*([^<]*)<\/p>/i);
+  const durationText = firstMatch(html, /<p>\s*Duration:\s*([^<]*)<\/p>/i);
+  const dateText = firstMatch(html, /<p>\s*Date:\s*([^<]*)<\/p>/i);
+  const roundIdText = firstMatch(html, /<p>\s*Round ID:\s*(\d+)\s*<\/p>/i);
+  const replayIdText = firstMatch(html, /id="buttonPlayers-(\d+)"/i);
+  const downloadLink = firstMatch(
+    html,
+    /<a[^>]*href="([^"]+)"[^>]*>\s*Download\s*<\/a>/i
+  );
+
+  const roundId = Number(roundIdText || fallbackRoundId);
+  if (!Number.isInteger(roundId)) {
+    throw new Error("Round ID missing or invalid.");
+  }
+
+  let roundDate = null;
+  if (dateText && /^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    roundDate = dateText;
+  }
+
+  return {
+    round_id: roundId,
+    map_name: mapName || null,
+    duration_text: durationText || null,
+    round_date: roundDate,
+    replay_id: replayIdText ? Number(replayIdText) : null,
+    download_link: downloadLink || null,
+  };
+}
+
+function parseApiPlayers(apiData) {
+  const out = [];
+  const participants = Array.isArray(apiData?.roundParticipants)
+    ? apiData.roundParticipants
+    : [];
+
+  for (const participant of participants) {
+    const username = (participant?.username || "").trim() || null;
+    const playerGuidRaw = String(participant?.playerGuid || "").trim();
+    const guidOk = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      playerGuidRaw
+    );
+    const playerGuid = guidOk ? playerGuidRaw : null;
+
+    const players = Array.isArray(participant?.players) ? participant.players : [];
+    for (const p of players) {
+      const jobs = Array.isArray(p?.jobPrototypes) ? p.jobPrototypes : [];
+      const antags = Array.isArray(p?.antagPrototypes) ? p.antagPrototypes : [];
+      out.push({
+        player_guid: playerGuid,
+        username,
+        character_name: (p?.playerIcName || "").trim() || null,
+        job: (jobs[0] || "").trim() || null,
+        is_antag: antags.length > 0,
+      });
+    }
+  }
+  return out;
 }
 
 function getDb(env) {
@@ -398,7 +520,103 @@ async function checkReplayPage(roundId) {
   }
   const html = await resp.text();
   const hasNotFound = /not found|404/i.test(html);
-  return { exists: !hasNotFound, replayUrl };
+  return { exists: !hasNotFound, replayUrl, html };
+}
+
+async function scrapeRound(roundId) {
+  const page = await checkReplayPage(roundId);
+  if (!page.exists) {
+    return { exists: false, replay_url: page.replayUrl };
+  }
+
+  const parsed = parseRoundPageHtml(page.html, roundId);
+  const apiData = { roundEndText: null, roundParticipants: [] };
+
+  if (parsed.replay_id) {
+    try {
+      const apiResp = await fetch(
+        `https://replays.iterator.systems/api/Replay/${parsed.replay_id}`,
+        { method: "GET" }
+      );
+      if (apiResp.ok) {
+        const json = await apiResp.json();
+        apiData.roundEndText = (json?.roundEndText || "").trim() || null;
+        apiData.roundParticipants = Array.isArray(json?.roundParticipants)
+          ? json.roundParticipants
+          : [];
+      }
+    } catch {
+      // Keep nullable API-derived fields as null.
+    }
+  }
+
+  return {
+    exists: true,
+    round: {
+      round_id: parsed.round_id,
+      map_name: parsed.map_name,
+      duration_text: parsed.duration_text,
+      round_date: parsed.round_date,
+      round_end_text: apiData.roundEndText,
+      round_result_key: classifyResult(apiData.roundEndText),
+      download_link: parsed.download_link,
+      source_url: page.replayUrl,
+      players: parseApiPlayers(apiData),
+    },
+    replay_url: page.replayUrl,
+  };
+}
+
+async function upsertRound(db, round) {
+  await db.unsafe(
+    `
+      INSERT INTO public.rounds (
+          round_id, map_name, duration_text, round_date, round_end_text,
+          round_result_key, download_link, source_url
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (round_id)
+      DO UPDATE SET
+          map_name = EXCLUDED.map_name,
+          duration_text = EXCLUDED.duration_text,
+          round_date = EXCLUDED.round_date,
+          round_end_text = EXCLUDED.round_end_text,
+          round_result_key = EXCLUDED.round_result_key,
+          download_link = EXCLUDED.download_link,
+          source_url = EXCLUDED.source_url,
+          scraped_at = NOW();
+    `,
+    [
+      round.round_id,
+      round.map_name,
+      round.duration_text,
+      round.round_date,
+      round.round_end_text,
+      round.round_result_key,
+      round.download_link,
+      round.source_url,
+    ]
+  );
+
+  await db.unsafe(`DELETE FROM public.round_players WHERE round_id = $1`, [round.round_id]);
+  for (const p of round.players || []) {
+    await db.unsafe(
+      `
+        INSERT INTO public.round_players (
+            round_id, player_guid, username, character_name, job, is_antag
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        round.round_id,
+        p.player_guid,
+        p.username,
+        p.character_name,
+        p.job,
+        Boolean(p.is_antag),
+      ]
+    );
+  }
 }
 
 async function getMyGames(db, startRound, endRound, queryText) {
@@ -530,18 +748,20 @@ export default {
 
       if (p === "/api/manual-scrape-next" && request.method === "POST") {
         const nextRoundId = await withDb(env, (db) => getNextRoundId(db));
-        const result = await checkReplayPage(nextRoundId);
-        if (!result.exists) {
+        const scraped = await scrapeRound(nextRoundId);
+        if (!scraped.exists) {
           return json({
             next_round_id: nextRoundId,
-            replay_url: result.replayUrl,
+            replay_url: scraped.replay_url,
             message: `No new round found at ${nextRoundId}.`,
           });
         }
+        await withDb(env, (db) => upsertRound(db, scraped.round));
         return json({
           next_round_id: nextRoundId,
-          replay_url: result.replayUrl,
-          message: `Round ${nextRoundId} appears to exist. Scraper ingestion is still run separately.`,
+          replay_url: scraped.replay_url,
+          inserted_players: (scraped.round.players || []).length,
+          message: `Inserted round ${nextRoundId}.`,
         });
       }
 
