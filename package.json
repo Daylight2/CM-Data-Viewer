@@ -1,0 +1,15 @@
+{
+  "name": "cm-data-viewer-root",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "wrangler": "^4.65.0"
+  }
+}
