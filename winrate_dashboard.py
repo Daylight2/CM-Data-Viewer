@@ -8,6 +8,13 @@ from urllib.parse import unquote
 
 import psycopg
 from flask import Flask, jsonify, render_template, request
+from scrape_replay_to_postgres import (
+    DEFAULT_URL_TEMPLATE,
+    ensure_schema as scraper_ensure_schema,
+    get_next_round_id,
+    parse_round_data,
+    upsert_round,
+)
 
 
 SECRETS_FILE = "local_secrets.json"
@@ -728,6 +735,40 @@ def api_my_games():
             "games": games,
         }
     )
+
+
+@app.post("/api/manual-scrape-next")
+def api_manual_scrape_next():
+    try:
+        with psycopg.connect(DEFAULT_DB_URL) as conn:
+            with conn.transaction():
+                scraper_ensure_schema(conn)
+            next_round_id = get_next_round_id(conn)
+            url = DEFAULT_URL_TEMPLATE.format(round_id=next_round_id)
+            try:
+                round_data = parse_round_data(url)
+            except Exception as exc:
+                return jsonify(
+                    {
+                        "ok": False,
+                        "message": f"No new round found at {next_round_id}. {exc}",
+                        "next_round_id": next_round_id,
+                    }
+                )
+
+            with conn.transaction():
+                upsert_round(conn, round_data)
+
+        return jsonify(
+            {
+                "ok": True,
+                "message": f"Imported round {round_data.round_id}.",
+                "round_id": round_data.round_id,
+                "players": len(round_data.players),
+            }
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
 
 
 if __name__ == "__main__":

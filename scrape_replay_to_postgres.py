@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -313,6 +314,39 @@ def upsert_round(conn: psycopg.Connection, round_data: RoundRecord) -> None:
             )
 
 
+def get_next_round_id(conn: psycopg.Connection) -> int:
+    row = conn.execute("SELECT COALESCE(MAX(round_id), 0) + 1 FROM rounds").fetchone()
+    return int(row[0])
+
+
+def print_round_json(round_data: RoundRecord) -> None:
+    print(
+        json.dumps(
+            {
+                "round_id": round_data.round_id,
+                "map": round_data.map_name,
+                "duration": round_data.duration_text,
+                "date": (round_data.round_date.isoformat() if round_data.round_date else None),
+                "round_result_key": round_data.round_result_key,
+                "round_end_text": round_data.round_end_text,
+                "download_link": round_data.download_link,
+                "source_url": round_data.source_url,
+                "players": [
+                    {
+                        "player_guid": p.player_guid,
+                        "username": p.username,
+                        "character_name": p.character_name,
+                        "job": p.job,
+                        "is_antag": p.is_antag,
+                    }
+                    for p in round_data.players
+                ],
+            },
+            indent=2,
+        )
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Scrape replay pages and store round + player data in PostgreSQL."
@@ -344,68 +378,103 @@ def main() -> None:
         action="store_true",
         help="Print scraped payload as JSON after writing to DB.",
     )
+    parser.add_argument(
+        "--poll-next",
+        action="store_true",
+        help=(
+            "Every interval, check only the next round_id after current DB max. "
+            "Stops after max-empty-checks consecutive misses."
+        ),
+    )
+    parser.add_argument(
+        "--interval-minutes",
+        type=float,
+        default=30.0,
+        help="Polling interval in minutes for --poll-next mode.",
+    )
+    parser.add_argument(
+        "--max-empty-checks",
+        type=int,
+        default=10,
+        help="Stop polling after this many consecutive rounds not found.",
+    )
     args = parser.parse_args()
 
     if "{round_id}" not in args.url_template:
         raise SystemExit("url-template must contain {round_id}.")
     if args.start_round > args.end_round:
         raise SystemExit("start-round must be <= end-round.")
+    if args.interval_minutes <= 0:
+        raise SystemExit("interval-minutes must be > 0.")
+    if args.max_empty_checks <= 0:
+        raise SystemExit("max-empty-checks must be > 0.")
 
-    scraped = 0
-    failed: list[int] = []
     with psycopg.connect(args.db_url) as conn:
         with conn.transaction():
             ensure_schema(conn)
 
-        for round_id in range(args.start_round, args.end_round + 1):
-            url = args.url_template.format(round_id=round_id)
-            try:
-                round_data = parse_round_data(url)
-            except Exception as exc:
-                failed.append(round_id)
-                print(f"Failed round {round_id}: {exc}")
-                continue
-
-            with conn.transaction():
-                upsert_round(conn, round_data)
-
-            scraped += 1
+        if args.poll_next:
+            misses = 0
+            next_round_id = get_next_round_id(conn)
+            sleep_seconds = args.interval_minutes * 60.0
             print(
-                f"Upserted round {round_data.round_id} with {len(round_data.players)} players. "
-                f"result={round_data.round_result_key or 'unknown'}"
+                f"Polling next rounds every {args.interval_minutes} minutes, "
+                f"starting at round_id={next_round_id}, max empty checks={args.max_empty_checks}"
             )
-
-            if args.print_json:
-                print(
-                    json.dumps(
-                        {
-                            "round_id": round_data.round_id,
-                            "map": round_data.map_name,
-                            "duration": round_data.duration_text,
-                            "date": round_data.round_date.isoformat(),
-                            "round_result_key": round_data.round_result_key,
-                            "round_end_text": round_data.round_end_text,
-                            "download_link": round_data.download_link,
-                            "source_url": round_data.source_url,
-                            "players": [
-                                {
-                                    "player_guid": p.player_guid,
-                                    "username": p.username,
-                                    "character_name": p.character_name,
-                                    "job": p.job,
-                                    "is_antag": p.is_antag,
-                                }
-                                for p in round_data.players
-                            ],
-                        },
-                        indent=2,
+            while misses < args.max_empty_checks:
+                url = args.url_template.format(round_id=next_round_id)
+                try:
+                    round_data = parse_round_data(url)
+                except Exception as exc:
+                    misses += 1
+                    print(
+                        f"No new round at {next_round_id} ({misses}/{args.max_empty_checks}): {exc}"
                     )
-                )
+                    if misses >= args.max_empty_checks:
+                        break
+                    time.sleep(sleep_seconds)
+                    continue
 
-    print(
-        f"Completed range {args.start_round}-{args.end_round}: "
-        f"scraped={scraped}, failed={len(failed)}"
-    )
+                with conn.transaction():
+                    upsert_round(conn, round_data)
+                print(
+                    f"Upserted round {round_data.round_id} with {len(round_data.players)} players. "
+                    f"result={round_data.round_result_key or 'unknown'}"
+                )
+                if args.print_json:
+                    print_round_json(round_data)
+                misses = 0
+                next_round_id = max(next_round_id + 1, round_data.round_id + 1)
+                time.sleep(sleep_seconds)
+
+            print(f"Polling stopped after {misses} consecutive empty checks.")
+        else:
+            scraped = 0
+            failed: list[int] = []
+            for round_id in range(args.start_round, args.end_round + 1):
+                url = args.url_template.format(round_id=round_id)
+                try:
+                    round_data = parse_round_data(url)
+                except Exception as exc:
+                    failed.append(round_id)
+                    print(f"Failed round {round_id}: {exc}")
+                    continue
+
+                with conn.transaction():
+                    upsert_round(conn, round_data)
+
+                scraped += 1
+                print(
+                    f"Upserted round {round_data.round_id} with {len(round_data.players)} players. "
+                    f"result={round_data.round_result_key or 'unknown'}"
+                )
+                if args.print_json:
+                    print_round_json(round_data)
+
+            print(
+                f"Completed range {args.start_round}-{args.end_round}: "
+                f"scraped={scraped}, failed={len(failed)}"
+            )
 
 
 if __name__ == "__main__":

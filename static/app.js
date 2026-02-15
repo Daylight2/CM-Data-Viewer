@@ -629,6 +629,26 @@ document.getElementById("tab-winrates-btn").addEventListener("click", () => swit
 document.getElementById("tab-map-winrates-btn").addEventListener("click", () => switchTab("map-winrates"));
 document.getElementById("tab-jobs-btn").addEventListener("click", () => switchTab("jobs"));
 document.getElementById("tab-my-games-btn").addEventListener("click", () => switchTab("my-games"));
+document.getElementById("manual-scrape-btn").addEventListener("click", async () => {
+    const statusEl = document.getElementById("manual-scrape-status");
+    statusEl.textContent = "Checking...";
+    try {
+        const resp = await fetch("/api/manual-scrape-next", { method: "POST" });
+        const payload = await resp.json();
+        if (!resp.ok) {
+            throw new Error(payload.error || payload.message || "Manual scrape failed.");
+        }
+        statusEl.textContent = payload.message || "Done.";
+
+        const startRound = Number(document.getElementById("start-round").value);
+        const endRound = Number(document.getElementById("end-round").value);
+        const characterName = document.getElementById("character-name").value;
+        const characterJob = document.getElementById("character-job").value;
+        await fetchAndRender(startRound, endRound, characterName, characterJob);
+    } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+    }
+});
 document.getElementById("my-games-search-btn").addEventListener("click", async () => {
     try {
         await fetchAndRenderMyGames();
