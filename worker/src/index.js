@@ -62,14 +62,14 @@ async function getWinrateRows(db, startRound, endRound, characterName, character
   const rows = await db.unsafe(
     `
       SELECT r.round_result_key, COUNT(*) AS cnt
-      FROM rounds r
+      FROM public.rounds r
       WHERE r.round_id BETWEEN $1 AND $2
         AND r.round_result_key = ANY($3::text[])
         AND (
           $4::text IS NULL
           OR EXISTS (
               SELECT 1
-              FROM round_players rp
+              FROM public.round_players rp
               WHERE rp.round_id = r.round_id
                 AND (
                   ($5 = false AND REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE $6)
@@ -131,13 +131,13 @@ async function getPlayerCounts(db, startRound, endRound, characterName, characte
     `
       WITH filtered_rounds AS (
           SELECT r.round_id, r.round_result_key
-          FROM rounds r
+          FROM public.rounds r
           WHERE r.round_id BETWEEN $1 AND $2
             AND (
               $3::text IS NULL
               OR EXISTS (
                   SELECT 1
-                  FROM round_players rp2
+                  FROM public.round_players rp2
                   WHERE rp2.round_id = r.round_id
                     AND (
                       ($4 = false AND REGEXP_REPLACE(rp2.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE $5)
@@ -156,7 +156,7 @@ async function getPlayerCounts(db, startRound, endRound, characterName, characte
       player_counts AS (
           SELECT fr.round_id, COUNT(rp.id)::int AS player_count
           FROM filtered_rounds fr
-          LEFT JOIN round_players rp ON rp.round_id = fr.round_id
+          LEFT JOIN public.round_players rp ON rp.round_id = fr.round_id
           GROUP BY fr.round_id
           HAVING COUNT(rp.id) > 0
       ),
@@ -220,8 +220,8 @@ async function getJobs(db, startRound, endRound, characterName, username) {
   const rows = await db.unsafe(
     `
       SELECT rp.job, COUNT(DISTINCT rp.round_id) AS games
-      FROM round_players rp
-      JOIN rounds r ON r.round_id = rp.round_id
+      FROM public.round_players rp
+      JOIN public.rounds r ON r.round_id = rp.round_id
       WHERE r.round_id BETWEEN $1 AND $2
         AND (
           $3::text IS NULL
@@ -267,8 +267,8 @@ async function getPlayersForJob(db, startRound, endRound, job) {
           COUNT(DISTINCT r.round_id)::int AS games,
           COUNT(DISTINCT CASE WHEN r.round_result_key IN ('marine major', 'marine minor') THEN r.round_id END)::int AS marine_wins,
           COUNT(DISTINCT CASE WHEN r.round_result_key IN ('xeno major', 'xeno minor') THEN r.round_id END)::int AS xeno_wins
-      FROM round_players rp
-      JOIN rounds r ON r.round_id = rp.round_id
+      FROM public.round_players rp
+      JOIN public.rounds r ON r.round_id = rp.round_id
       WHERE r.round_id BETWEEN $1 AND $2
         AND rp.job = $3
       GROUP BY rp.username, rp.player_guid, REGEXP_REPLACE(rp.character_name, '[0-9]+', '00', 'g')
@@ -313,13 +313,13 @@ async function getMapWinrates(db, startRound, endRound, characterName, character
           COUNT(CASE WHEN r.round_result_key = 'xeno major' THEN 1 END)::int AS xeno_major,
           COUNT(CASE WHEN r.round_result_key = 'draw' THEN 1 END)::int AS draw_count,
           AVG(EXTRACT(EPOCH FROM r.duration_text::interval))::float AS avg_match_length_seconds
-      FROM rounds r
+      FROM public.rounds r
       WHERE r.round_id BETWEEN $1 AND $2
         AND (
           $3::text IS NULL
           OR EXISTS (
               SELECT 1
-              FROM round_players rp
+              FROM public.round_players rp
               WHERE rp.round_id = r.round_id
                 AND (
                   ($4 = false AND REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE $5)
@@ -398,8 +398,8 @@ async function getMyGames(db, startRound, endRound, queryText) {
               DISTINCT (REGEXP_REPLACE(rp.character_name, '[0-9]+', '00', 'g') || ' [' || rp.job || ']'),
               ', '
           ) AS your_characters_jobs
-      FROM rounds r
-      JOIN round_players rp ON rp.round_id = r.round_id
+      FROM public.rounds r
+      JOIN public.round_players rp ON rp.round_id = r.round_id
       WHERE r.round_id BETWEEN $1 AND $2
         AND (
             ($3 = false AND (rp.username ILIKE $4 OR REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE $5))

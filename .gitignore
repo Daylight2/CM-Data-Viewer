@@ -1,3 +1,5 @@
 local_secrets.json
 worker/node_modules/
 worker/.wrangler/
+cm_data.sql
+*.dump
