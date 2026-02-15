@@ -361,6 +361,36 @@ async function fetchLatestRoundId() {
     }
 }
 
+function getSecondsUntilNextHalfHour() {
+    const now = new Date();
+    const next = new Date(now);
+    next.setSeconds(0, 0);
+    if (now.getMinutes() < 30) {
+        next.setMinutes(30);
+    } else {
+        next.setHours(next.getHours() + 1);
+        next.setMinutes(0);
+    }
+    return Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
+}
+
+function startNextRoundCountdown() {
+    const el = document.getElementById("next-round-check-countdown");
+    if (!el) {
+        return;
+    }
+
+    const render = () => {
+        const totalSeconds = getSecondsUntilNextHalfHour();
+        const mm = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+        const ss = String(totalSeconds % 60).padStart(2, "0");
+        el.textContent = `Checking for new round in ${mm}:${ss}`;
+    };
+
+    render();
+    setInterval(render, 1000);
+}
+
 function renderMyGames(games, query) {
     const tbody = document.getElementById("my-games-body");
     const meta = document.getElementById("my-games-meta");
@@ -797,5 +827,6 @@ fetchAndRender(
     document.getElementById("error").textContent = err.message;
 });
 fetchLatestRoundId().catch(() => {});
+startNextRoundCountdown();
 updateSortHeaderLabels();
 updateMapSortHeaderLabels();
