@@ -640,21 +640,30 @@ async function runAutomaticUpdate(env) {
   const startRoundId = await withDb(env, (db) => getNextRoundId(db));
   const found = [];
   const checked = [];
+  const errors = [];
 
   for (let i = 0; i < AUTO_LOOKAHEAD_ROUNDS; i += 1) {
     const roundId = startRoundId + i;
-    const scraped = await scrapeRound(roundId);
     checked.push(roundId);
-    if (!scraped.exists) {
-      continue;
+    try {
+      const scraped = await scrapeRound(roundId);
+      if (!scraped.exists) {
+        continue;
+      }
+      found.push(scraped.round);
+    } catch (err) {
+      errors.push({
+        round_id: roundId,
+        error: String(err?.message || err),
+      });
     }
-    found.push(scraped.round);
   }
 
   if (!found.length) {
     return {
       status: "no_new_round",
       checked_rounds: checked,
+      errors,
       message: `No new rounds found in ${startRoundId}-${startRoundId + AUTO_LOOKAHEAD_ROUNDS - 1}.`,
     };
   }
@@ -670,6 +679,7 @@ async function runAutomaticUpdate(env) {
     inserted_round_ids: found.map((r) => r.round_id),
     inserted_rounds: found.length,
     checked_rounds: checked,
+    errors,
     message: `Inserted ${found.length} round(s): ${found.map((r) => r.round_id).join(", ")}.`,
   };
 }
@@ -806,6 +816,11 @@ export default {
         return json({ latest_round_id: latestRoundId });
       }
 
+      if (p === "/api/auto-update-now" && request.method === "POST") {
+        const result = await runAutomaticUpdate(env);
+        return json(result);
+      }
+
       if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
         return env.ASSETS.fetch(request);
       }
@@ -822,9 +837,13 @@ export default {
   },
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(
-      runAutomaticUpdate(env).then((result) => {
-        console.log("[auto-update]", JSON.stringify(result));
-      })
+      runAutomaticUpdate(env)
+        .then((result) => {
+          console.log("[auto-update]", JSON.stringify(result));
+        })
+        .catch((err) => {
+          console.error("[auto-update] failed", String(err?.message || err));
+        })
     );
   },
 };

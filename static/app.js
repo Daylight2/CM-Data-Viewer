@@ -382,12 +382,30 @@ function startNextRoundCountdown() {
     if (!el) {
         return;
     }
+    let lastAutoUpdateBucket = null;
+
+    const triggerAutoUpdateNow = async () => {
+        try {
+            await fetch("/api/auto-update-now", { method: "POST" });
+            await fetchLatestRoundId();
+        } catch {
+            // Ignore silent auto-update trigger errors in UI.
+        }
+    };
 
     const render = () => {
         const totalSeconds = getSecondsUntilNextFiveMinuteMark();
         const mm = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
         const ss = String(totalSeconds % 60).padStart(2, "0");
         el.textContent = `Checking for new round in ${mm}:${ss}`;
+
+        if (totalSeconds <= 1) {
+            const bucket = Math.floor(Date.now() / 300000);
+            if (bucket !== lastAutoUpdateBucket) {
+                lastAutoUpdateBucket = bucket;
+                triggerAutoUpdateNow();
+            }
+        }
     };
 
     render();
