@@ -240,6 +240,7 @@
         </form>
         <div class="tabs">
             <button class="tab-btn active" type="button" id="tab-winrates-btn">Winrates</button>
+            <button class="tab-btn" type="button" id="tab-map-winrates-btn">Map Winrates</button>
             <button class="tab-btn" type="button" id="tab-jobs-btn">Jobs</button>
         </div>
         <div id="error"></div>
@@ -298,6 +299,25 @@
                     </table>
                 </div>
             </div>
+        </div>
+        <div class="tab-content" id="tab-map-winrates">
+            <div class="section-title">Detailed Winrates By Map</div>
+            <table>
+                <thead>
+                <tr>
+                    <th id="map-sort-map_name" class="sortable">Map</th>
+                    <th id="map-sort-total_rounds" class="sortable">Total</th>
+                    <th id="map-sort-marine_major" class="sortable">Marine Major</th>
+                    <th id="map-sort-marine_minor" class="sortable">Marine Minor</th>
+                    <th id="map-sort-xeno_minor" class="sortable">Xeno Minor</th>
+                    <th id="map-sort-xeno_major" class="sortable">Xeno Major</th>
+                    <th id="map-sort-draw" class="sortable">Draw</th>
+                    <th id="map-sort-avg_match_length_seconds" class="sortable">Avg Match Length</th>
+                    <th id="map-sort-marine_winrate_pct" class="sortable">Marine WR%</th>
+                </tr>
+                </thead>
+                <tbody id="map-winrates-body"></tbody>
+            </table>
         </div>
     </div>
 </div>

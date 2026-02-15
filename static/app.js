@@ -4,6 +4,7 @@ let selectedJob = null;
 let allJobs = [];
 let allPlayersForSelectedJob = [];
 let playerSort = { key: "games", dir: "desc" };
+let mapSort = { key: "total_rounds", dir: "desc" };
 
 function renderTable(results) {
     const tbody = document.getElementById("results-body");
@@ -70,6 +71,7 @@ function renderPlayersChart(points) {
     const ctx = document.getElementById("players-chart").getContext("2d");
     const labels = points.map((p) => p.round_id);
     const values = points.map((p) => p.player_count);
+    const rollingWr = points.map((p) => p.marine_wr_rolling_20_pct);
 
     if (playersChartInstance) {
         playersChartInstance.destroy();
@@ -79,15 +81,29 @@ function renderPlayersChart(points) {
         type: "line",
         data: {
             labels,
-            datasets: [{
-                label: "Players",
-                data: values,
-                borderColor: "#3fa2ff",
-                backgroundColor: "rgba(63, 162, 255, 0.2)",
-                fill: true,
-                tension: 0.2,
-                pointRadius: 2
-            }]
+            datasets: [
+                {
+                    label: "Players",
+                    data: values,
+                    borderColor: "#3fa2ff",
+                    backgroundColor: "rgba(63, 162, 255, 0.2)",
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 2,
+                    yAxisID: "yPlayers"
+                },
+                {
+                    label: "Marine WR% (Rolling 20)",
+                    data: rollingWr,
+                    borderColor: "#40c057",
+                    backgroundColor: "rgba(64, 192, 87, 0.15)",
+                    fill: false,
+                    tension: 0.2,
+                    spanGaps: true,
+                    pointRadius: 2,
+                    yAxisID: "yWr"
+                }
+            ]
         },
         options: {
             responsive: true,
@@ -101,10 +117,28 @@ function renderPlayersChart(points) {
                     ticks: { color: "#9db0c0" },
                     grid: { color: "rgba(157, 176, 192, 0.2)" }
                 },
-                y: {
+                yPlayers: {
+                    type: "linear",
+                    position: "left",
                     beginAtZero: true,
                     ticks: { color: "#9db0c0" },
                     grid: { color: "rgba(157, 176, 192, 0.2)" }
+                },
+                yWr: {
+                    type: "linear",
+                    position: "right",
+                    beginAtZero: true,
+                    min: 0,
+                    max: 100,
+                    ticks: {
+                        color: "#9db0c0",
+                        callback(value) {
+                            return `${value}%`;
+                        }
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
                 }
             }
         }
@@ -113,21 +147,130 @@ function renderPlayersChart(points) {
 
 function switchTab(tabName) {
     const winratesBtn = document.getElementById("tab-winrates-btn");
+    const mapWinratesBtn = document.getElementById("tab-map-winrates-btn");
     const jobsBtn = document.getElementById("tab-jobs-btn");
     const winratesTab = document.getElementById("tab-winrates");
+    const mapWinratesTab = document.getElementById("tab-map-winrates");
     const jobsTab = document.getElementById("tab-jobs");
 
     if (tabName === "jobs") {
         jobsBtn.classList.add("active");
         winratesBtn.classList.remove("active");
+        mapWinratesBtn.classList.remove("active");
         jobsTab.classList.add("active");
         winratesTab.classList.remove("active");
+        mapWinratesTab.classList.remove("active");
+    } else if (tabName === "map-winrates") {
+        mapWinratesBtn.classList.add("active");
+        winratesBtn.classList.remove("active");
+        jobsBtn.classList.remove("active");
+        mapWinratesTab.classList.add("active");
+        winratesTab.classList.remove("active");
+        jobsTab.classList.remove("active");
     } else {
         winratesBtn.classList.add("active");
+        mapWinratesBtn.classList.remove("active");
         jobsBtn.classList.remove("active");
         winratesTab.classList.add("active");
+        mapWinratesTab.classList.remove("active");
         jobsTab.classList.remove("active");
     }
+}
+
+function renderMapWinrates(rows) {
+    const sorted = [...rows].sort((a, b) => {
+        const key = mapSort.key;
+        const dir = mapSort.dir;
+        const left = a[key];
+        const right = b[key];
+
+        if (key === "map_name") {
+            const cmp = String(left).localeCompare(String(right));
+            return dir === "asc" ? cmp : -cmp;
+        }
+
+        const lnum = Number(left);
+        const rnum = Number(right);
+        if (lnum === rnum) {
+            const tie = String(a.map_name).localeCompare(String(b.map_name));
+            return dir === "asc" ? tie : -tie;
+        }
+        return dir === "asc" ? lnum - rnum : rnum - lnum;
+    });
+
+    const tbody = document.getElementById("map-winrates-body");
+    tbody.innerHTML = "";
+    for (const r of sorted) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${r.map_name}</td>
+            <td>${r.total_rounds}</td>
+            <td>${r.marine_major}</td>
+            <td>${r.marine_minor}</td>
+            <td>${r.xeno_minor}</td>
+            <td>${r.xeno_major}</td>
+            <td>${r.draw}</td>
+            <td>${r.avg_match_length}</td>
+            <td>${r.marine_winrate_pct.toFixed(2)}%</td>
+        `;
+        tbody.appendChild(tr);
+    }
+    updateMapSortHeaderLabels();
+}
+
+function updateMapSortHeaderLabels() {
+    const keys = [
+        "map_name",
+        "total_rounds",
+        "marine_major",
+        "marine_minor",
+        "xeno_minor",
+        "xeno_major",
+        "draw",
+        "avg_match_length_seconds",
+        "marine_winrate_pct"
+    ];
+    const labels = {
+        map_name: "Map",
+        total_rounds: "Total",
+        marine_major: "Marine Major",
+        marine_minor: "Marine Minor",
+        xeno_minor: "Xeno Minor",
+        xeno_major: "Xeno Major",
+        draw: "Draw",
+        avg_match_length_seconds: "Avg Match Length",
+        marine_winrate_pct: "Marine WR%"
+    };
+    for (const key of keys) {
+        const th = document.getElementById(`map-sort-${key}`);
+        if (!th) {
+            continue;
+        }
+        th.textContent = labels[key];
+        if (mapSort.key === key) {
+            th.textContent += mapSort.dir === "asc" ? " ^" : " v";
+        }
+    }
+}
+
+async function fetchMapWinrates(startRound, endRound, characterName, characterJob) {
+    const params = new URLSearchParams({
+        start_round: String(startRound),
+        end_round: String(endRound)
+    });
+    if (characterName && characterName.trim() !== "") {
+        params.set("character_name", characterName.trim());
+    }
+    if (characterJob && characterJob.trim() !== "") {
+        params.set("character_job", characterJob.trim());
+    }
+
+    const resp = await fetch(`/api/map-winrates?${params.toString()}`);
+    const payload = await resp.json();
+    if (!resp.ok) {
+        throw new Error(payload.error || "Failed to load map winrates.");
+    }
+    return payload.maps;
 }
 
 function renderJobsList(jobs) {
@@ -341,6 +484,9 @@ async function fetchAndRender(startRound, endRound, characterName, characterJob)
         document.getElementById("job-title").textContent = "Players";
         document.getElementById("job-players-body").innerHTML = "";
     }
+
+    const mapWinrates = await fetchMapWinrates(startRound, endRound, characterName, characterJob);
+    renderMapWinrates(mapWinrates);
 }
 
 document.getElementById("range-form").addEventListener("submit", async (event) => {
@@ -365,7 +511,41 @@ document.getElementById("range-form").addEventListener("submit", async (event) =
 });
 
 document.getElementById("tab-winrates-btn").addEventListener("click", () => switchTab("winrates"));
+document.getElementById("tab-map-winrates-btn").addEventListener("click", () => switchTab("map-winrates"));
 document.getElementById("tab-jobs-btn").addEventListener("click", () => switchTab("jobs"));
+[
+    "map_name",
+    "total_rounds",
+    "marine_major",
+    "marine_minor",
+    "xeno_minor",
+    "xeno_major",
+    "draw",
+    "avg_match_length_seconds",
+    "marine_winrate_pct"
+].forEach((key) => {
+    const th = document.getElementById(`map-sort-${key}`);
+    if (!th) {
+        return;
+    }
+    th.addEventListener("click", async () => {
+        if (mapSort.key === key) {
+            mapSort.dir = mapSort.dir === "asc" ? "desc" : "asc";
+        } else {
+            mapSort = { key, dir: key === "map_name" ? "asc" : "desc" };
+        }
+        const startRound = Number(document.getElementById("start-round").value);
+        const endRound = Number(document.getElementById("end-round").value);
+        const characterName = document.getElementById("character-name").value;
+        const characterJob = document.getElementById("character-job").value;
+        try {
+            const mapWinrates = await fetchMapWinrates(startRound, endRound, characterName, characterJob);
+            renderMapWinrates(mapWinrates);
+        } catch (err) {
+            document.getElementById("error").textContent = err.message;
+        }
+    });
+});
 document.getElementById("sort-games").addEventListener("click", () => {
     if (playerSort.key === "games") {
         playerSort.dir = playerSort.dir === "asc" ? "desc" : "asc";
@@ -464,3 +644,4 @@ fetchAndRender(
     document.getElementById("error").textContent = err.message;
 });
 updateSortHeaderLabels();
+updateMapSortHeaderLabels();
