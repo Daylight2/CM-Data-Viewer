@@ -84,10 +84,44 @@ function renderChart(results) {
 }
 
 function renderPlayersChart(points) {
+    function downsampleSeries(input, maxPoints = 250) {
+        if (!input || input.length <= maxPoints) {
+            return input;
+        }
+        const step = Math.ceil(input.length / maxPoints);
+        const sampled = [];
+        for (let i = 0; i < input.length; i += step) {
+            const slice = input.slice(i, i + step);
+            if (slice.length === 0) {
+                continue;
+            }
+            const roundId = Math.round(
+                slice.reduce((sum, p) => sum + Number(p.round_id), 0) / slice.length
+            );
+            const playerCount = Math.round(
+                slice.reduce((sum, p) => sum + Number(p.player_count), 0) / slice.length
+            );
+            const wrVals = slice
+                .map((p) => p.marine_wr_rolling_20_pct)
+                .filter((v) => v !== null && v !== undefined);
+            const wr =
+                wrVals.length > 0
+                    ? Number((wrVals.reduce((sum, v) => sum + Number(v), 0) / wrVals.length).toFixed(2))
+                    : null;
+            sampled.push({
+                round_id: roundId,
+                player_count: playerCount,
+                marine_wr_rolling_20_pct: wr
+            });
+        }
+        return sampled;
+    }
+
+    const chartPoints = downsampleSeries(points, 250);
     const ctx = document.getElementById("players-chart").getContext("2d");
-    const labels = points.map((p) => p.round_id);
-    const values = points.map((p) => p.player_count);
-    const rollingWr = points.map((p) => p.marine_wr_rolling_20_pct);
+    const labels = chartPoints.map((p) => p.round_id);
+    const values = chartPoints.map((p) => p.player_count);
+    const rollingWr = chartPoints.map((p) => p.marine_wr_rolling_20_pct);
 
     if (playersChartInstance) {
         playersChartInstance.destroy();
@@ -130,7 +164,10 @@ function renderPlayersChart(points) {
             },
             scales: {
                 x: {
-                    ticks: { color: "#9db0c0" },
+                    ticks: {
+                        color: "#9db0c0",
+                        maxTicksLimit: 12
+                    },
                     grid: { color: "rgba(157, 176, 192, 0.2)" }
                 },
                 yPlayers: {
