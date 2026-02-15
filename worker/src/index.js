@@ -383,6 +383,24 @@ async function getMapWinrates(db, startRound, endRound, characterName, character
   });
 }
 
+async function getNextRoundId(db) {
+  const rows = await db.unsafe(
+    `SELECT COALESCE(MAX(round_id), 0)::int + 1 AS next_round_id FROM public.rounds;`
+  );
+  return Number(rows?.[0]?.next_round_id || 1);
+}
+
+async function checkReplayPage(roundId) {
+  const replayUrl = `https://replays.iterator.systems/replay/rmc14/alamo/${roundId}`;
+  const resp = await fetch(replayUrl, { method: "GET" });
+  if (!resp.ok) {
+    return { exists: false, replayUrl };
+  }
+  const html = await resp.text();
+  const hasNotFound = /not found|404/i.test(html);
+  return { exists: !hasNotFound, replayUrl };
+}
+
 async function getMyGames(db, startRound, endRound, queryText) {
   const q = parseSearchQuery(queryText);
   if (!q.value) return [];
@@ -508,6 +526,23 @@ export default {
           getMyGames(db, start, end, q)
         );
         return json({ start_round: start, end_round: end, query: q, games });
+      }
+
+      if (p === "/api/manual-scrape-next" && request.method === "POST") {
+        const nextRoundId = await withDb(env, (db) => getNextRoundId(db));
+        const result = await checkReplayPage(nextRoundId);
+        if (!result.exists) {
+          return json({
+            next_round_id: nextRoundId,
+            replay_url: result.replayUrl,
+            message: `No new round found at ${nextRoundId}.`,
+          });
+        }
+        return json({
+          next_round_id: nextRoundId,
+          replay_url: result.replayUrl,
+          message: `Round ${nextRoundId} appears to exist. Scraper ingestion is still run separately.`,
+        });
       }
 
       if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
