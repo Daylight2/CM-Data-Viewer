@@ -586,10 +586,16 @@ def get_my_games(
 
 @app.get("/")
 def index():
+    latest_round_id = get_latest_round_id(DEFAULT_DB_URL)
+    if latest_round_id is None:
+        default_end_round = DEFAULT_END_ROUND
+    else:
+        default_end_round = latest_round_id
+    default_start_round = max(1, default_end_round - 100)
     return render_template(
         "index.html",
-        default_start_round=DEFAULT_START_ROUND,
-        default_end_round=DEFAULT_END_ROUND,
+        default_start_round=default_start_round,
+        default_end_round=default_end_round,
     )
 
 

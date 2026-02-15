@@ -309,7 +309,7 @@ async function fetchMapWinrates(startRound, endRound, characterName, characterJo
 async function fetchLatestRoundId() {
     const latestEl = document.getElementById("latest-round-id");
     if (!latestEl) {
-        return;
+        return null;
     }
     try {
         const resp = await fetch("/api/latest-round");
@@ -319,8 +319,10 @@ async function fetchLatestRoundId() {
         }
         const latest = payload.latest_round_id;
         latestEl.textContent = `Latest stored round ID: ${latest === null ? "N/A" : latest}`;
+        return latest;
     } catch {
         latestEl.textContent = "Latest stored round ID: unavailable";
+        return null;
     }
 }
 
@@ -800,15 +802,26 @@ document.getElementById("min-games").addEventListener("input", () => {
     }
 });
 
-fetchAndRender(
-    Number(document.getElementById("start-round").value),
-    Number(document.getElementById("end-round").value),
-    document.getElementById("character-name").value,
-    document.getElementById("character-job").value
-).catch((err) => {
+async function initializeDashboard() {
+    const latest = await fetchLatestRoundId();
+    if (Number.isInteger(latest) && latest > 0) {
+        const end = latest;
+        const start = Math.max(1, latest - 100);
+        document.getElementById("start-round").value = String(start);
+        document.getElementById("end-round").value = String(end);
+    }
+
+    await fetchAndRender(
+        Number(document.getElementById("start-round").value),
+        Number(document.getElementById("end-round").value),
+        document.getElementById("character-name").value,
+        document.getElementById("character-job").value
+    );
+}
+
+initializeDashboard().catch((err) => {
     document.getElementById("error").textContent = err.message;
 });
-fetchLatestRoundId().catch(() => {});
 startNextRoundCountdown();
 updateSortHeaderLabels();
 updateMapSortHeaderLabels();
