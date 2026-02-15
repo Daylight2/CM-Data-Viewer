@@ -70,6 +70,16 @@ def normalize_character_search(text: str | None) -> str | None:
     return normalized.strip() or None
 
 
+def parse_search_query(text: str | None) -> tuple[str | None, bool]:
+    if not text:
+        return None, False
+    value = text.strip()
+    strict = len(value) >= 2 and value.startswith('"') and value.endswith('"')
+    if strict:
+        value = value[1:-1].strip()
+    return (value or None), strict
+
+
 def get_winrate_rows(
     db_url: str,
     start_round: int,
@@ -79,10 +89,11 @@ def get_winrate_rows(
 ) -> tuple[list[WinrateRow], int]:
     bucket_counts = {key: 0 for key in RESULT_BUCKETS}
     total = 0
-    name_pattern = f"%{character_name.strip()}%" if character_name else None
-    job_pattern = f"%{character_job.strip()}%" if character_job else None
-    normalized_name = normalize_character_search(character_name)
-    normalized_name_pattern = f"%{normalized_name}%" if normalized_name else None
+    character_name_value, character_name_strict = parse_search_query(character_name)
+    character_job_value, character_job_strict = parse_search_query(character_job)
+    normalized_name = normalize_character_search(character_name_value)
+    normalized_name_pattern = f"%{normalized_name}%" if normalized_name and not character_name_strict else None
+    job_pattern = f"%{character_job_value}%" if character_job_value and not character_job_strict else None
 
     query = """
         SELECT r.round_result_key, COUNT(*) AS cnt
@@ -95,8 +106,20 @@ def get_winrate_rows(
                 SELECT 1
                 FROM round_players rp
                 WHERE rp.round_id = r.round_id
-                  AND REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s
-                  AND (%s::text IS NULL OR rp.job ILIKE %s)
+                  AND (
+                    %s::text IS NULL
+                    OR (
+                        (%s = false AND REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s)
+                        OR (%s = true AND LOWER(REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g')) = LOWER(%s))
+                    )
+                  )
+                  AND (
+                    %s::text IS NULL
+                    OR (
+                        (%s = false AND rp.job ILIKE %s)
+                        OR (%s = true AND LOWER(rp.job) = LOWER(%s))
+                    )
+                  )
             )
           )
         GROUP BY r.round_result_key;
@@ -110,10 +133,16 @@ def get_winrate_rows(
                     start_round,
                     end_round,
                     RESULT_BUCKETS,
-                    name_pattern,
+                    character_name_value,
+                    character_name_strict,
                     normalized_name_pattern,
+                    character_name_strict,
+                    normalized_name,
+                    character_job_value,
+                    character_job_strict,
                     job_pattern,
-                    job_pattern,
+                    character_job_strict,
+                    character_job_value,
                 ),
             )
             for result_key, count in cur.fetchall():
@@ -136,10 +165,11 @@ def get_player_counts(
     character_name: str | None,
     character_job: str | None,
 ) -> list[dict[str, int | float | None]]:
-    name_pattern = f"%{character_name.strip()}%" if character_name else None
-    job_pattern = f"%{character_job.strip()}%" if character_job else None
-    normalized_name = normalize_character_search(character_name)
-    normalized_name_pattern = f"%{normalized_name}%" if normalized_name else None
+    character_name_value, character_name_strict = parse_search_query(character_name)
+    character_job_value, character_job_strict = parse_search_query(character_job)
+    normalized_name = normalize_character_search(character_name_value)
+    normalized_name_pattern = f"%{normalized_name}%" if normalized_name and not character_name_strict else None
+    job_pattern = f"%{character_job_value}%" if character_job_value and not character_job_strict else None
     query = """
         WITH filtered_rounds AS (
             SELECT r.round_id, r.round_result_key
@@ -151,8 +181,20 @@ def get_player_counts(
                     SELECT 1
                     FROM round_players rp2
                     WHERE rp2.round_id = r.round_id
-                      AND REGEXP_REPLACE(rp2.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s
-                      AND (%s::text IS NULL OR rp2.job ILIKE %s)
+                      AND (
+                        %s::text IS NULL
+                        OR (
+                            (%s = false AND REGEXP_REPLACE(rp2.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s)
+                            OR (%s = true AND LOWER(REGEXP_REPLACE(rp2.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g')) = LOWER(%s))
+                        )
+                      )
+                      AND (
+                        %s::text IS NULL
+                        OR (
+                            (%s = false AND rp2.job ILIKE %s)
+                            OR (%s = true AND LOWER(rp2.job) = LOWER(%s))
+                        )
+                      )
                 )
               )
         ),
@@ -200,10 +242,16 @@ def get_player_counts(
                 (
                     start_round,
                     end_round,
-                    name_pattern,
+                    character_name_value,
+                    character_name_strict,
                     normalized_name_pattern,
+                    character_name_strict,
+                    normalized_name,
+                    character_job_value,
+                    character_job_strict,
                     job_pattern,
-                    job_pattern,
+                    character_job_strict,
+                    character_job_value,
                 ),
             )
             for round_id, player_count, marine_wr_rolling_20_pct in cur.fetchall():
@@ -228,10 +276,11 @@ def get_jobs(
     character_name: str | None,
     username: str | None,
 ) -> list[dict[str, int]]:
-    name_pattern = f"%{character_name.strip()}%" if character_name else None
-    username_pattern = f"%{username.strip()}%" if username else None
-    normalized_name = normalize_character_search(character_name)
-    normalized_name_pattern = f"%{normalized_name}%" if normalized_name else None
+    character_name_value, character_name_strict = parse_search_query(character_name)
+    username_value, username_strict = parse_search_query(username)
+    normalized_name = normalize_character_search(character_name_value)
+    normalized_name_pattern = f"%{normalized_name}%" if normalized_name and not character_name_strict else None
+    username_pattern = f"%{username_value}%" if username_value and not username_strict else None
     query = """
         SELECT rp.job, COUNT(DISTINCT rp.round_id) AS games
         FROM round_players rp
@@ -239,9 +288,18 @@ def get_jobs(
         WHERE r.round_id BETWEEN %s AND %s
           AND (
             %s::text IS NULL
-            OR REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s
+            OR (
+                (%s = false AND REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s)
+                OR (%s = true AND LOWER(REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g')) = LOWER(%s))
+            )
           )
-          AND (%s::text IS NULL OR rp.username ILIKE %s)
+          AND (
+            %s::text IS NULL
+            OR (
+                (%s = false AND rp.username ILIKE %s)
+                OR (%s = true AND LOWER(rp.username) = LOWER(%s))
+            )
+          )
         GROUP BY rp.job
         ORDER BY games DESC, rp.job ASC;
     """
@@ -254,10 +312,16 @@ def get_jobs(
                 (
                     start_round,
                     end_round,
-                    name_pattern,
+                    character_name_value,
+                    character_name_strict,
                     normalized_name_pattern,
+                    character_name_strict,
+                    normalized_name,
+                    username_value,
+                    username_strict,
                     username_pattern,
-                    username_pattern,
+                    username_strict,
+                    username_value,
                 ),
             )
             for job, games in cur.fetchall():
@@ -312,10 +376,11 @@ def get_map_winrates(
     character_name: str | None,
     character_job: str | None,
 ) -> list[dict[str, str | int | float]]:
-    name_pattern = f"%{character_name.strip()}%" if character_name else None
-    job_pattern = f"%{character_job.strip()}%" if character_job else None
-    normalized_name = normalize_character_search(character_name)
-    normalized_name_pattern = f"%{normalized_name}%" if normalized_name else None
+    character_name_value, character_name_strict = parse_search_query(character_name)
+    character_job_value, character_job_strict = parse_search_query(character_job)
+    normalized_name = normalize_character_search(character_name_value)
+    normalized_name_pattern = f"%{normalized_name}%" if normalized_name and not character_name_strict else None
+    job_pattern = f"%{character_job_value}%" if character_job_value and not character_job_strict else None
 
     query = """
         SELECT
@@ -335,8 +400,20 @@ def get_map_winrates(
                 SELECT 1
                 FROM round_players rp
                 WHERE rp.round_id = r.round_id
-                  AND REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s
-                  AND (%s::text IS NULL OR rp.job ILIKE %s)
+                  AND (
+                    %s::text IS NULL
+                    OR (
+                        (%s = false AND REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s)
+                        OR (%s = true AND LOWER(REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g')) = LOWER(%s))
+                    )
+                  )
+                  AND (
+                    %s::text IS NULL
+                    OR (
+                        (%s = false AND rp.job ILIKE %s)
+                        OR (%s = true AND LOWER(rp.job) = LOWER(%s))
+                    )
+                  )
             )
           )
           AND r.round_result_key = ANY(%s)
@@ -352,10 +429,16 @@ def get_map_winrates(
                 (
                     start_round,
                     end_round,
-                    name_pattern,
+                    character_name_value,
+                    character_name_strict,
                     normalized_name_pattern,
+                    character_name_strict,
+                    normalized_name,
+                    character_job_value,
+                    character_job_strict,
                     job_pattern,
-                    job_pattern,
+                    character_job_strict,
+                    character_job_value,
                     RESULT_BUCKETS,
                 ),
             )
@@ -394,6 +477,93 @@ def get_map_winrates(
                     }
                 )
 
+    return rows
+
+
+def get_my_games(
+    db_url: str, start_round: int, end_round: int, query_text: str
+) -> list[dict[str, str | int]]:
+    raw, strict = parse_search_query(query_text)
+    if not raw:
+        return []
+
+    like_pattern = f"%{raw}%"
+    normalized = normalize_character_search(raw) or raw
+    normalized_like = f"%{normalized}%"
+
+    query = """
+        SELECT
+            r.round_id,
+            r.round_date::text AS round_date,
+            r.map_name,
+            r.duration_text,
+            r.round_result_key,
+            r.download_link,
+            STRING_AGG(
+                DISTINCT (
+                    REGEXP_REPLACE(rp.character_name, '[0-9]+', '00', 'g') || ' [' || rp.job || ']'
+                ),
+                ', '
+            ) AS your_characters_jobs
+        FROM rounds r
+        JOIN round_players rp ON rp.round_id = r.round_id
+        WHERE r.round_id BETWEEN %s AND %s
+          AND (
+              (%s = false AND (
+                  rp.username ILIKE %s
+                  OR REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g') ILIKE %s
+              ))
+              OR (%s = true AND (
+                  LOWER(rp.username) = LOWER(%s)
+                  OR LOWER(REGEXP_REPLACE(rp.character_name, '([\\(\\[][^\\)\\]]*)[0-9]+', '\\1', 'g')) = LOWER(%s)
+              ))
+          )
+        GROUP BY
+            r.round_id,
+            r.round_date,
+            r.map_name,
+            r.duration_text,
+            r.round_result_key,
+            r.download_link
+        ORDER BY r.round_id DESC;
+    """
+
+    rows: list[dict[str, str | int]] = []
+    with psycopg.connect(db_url) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                query,
+                (
+                    start_round,
+                    end_round,
+                    strict,
+                    like_pattern,
+                    normalized_like,
+                    strict,
+                    raw,
+                    normalized,
+                ),
+            )
+            for (
+                round_id,
+                round_date,
+                map_name,
+                duration_text,
+                round_result_key,
+                download_link,
+                your_characters_jobs,
+            ) in cur.fetchall():
+                rows.append(
+                    {
+                        "round_id": int(round_id),
+                        "round_date": str(round_date),
+                        "map_name": str(map_name),
+                        "duration_text": str(duration_text),
+                        "round_result_key": str(round_result_key),
+                        "download_link": str(download_link),
+                        "your_characters_jobs": str(your_characters_jobs or ""),
+                    }
+                )
     return rows
 
 
@@ -528,6 +698,34 @@ def api_map_winrates():
             "character_name": character_name,
             "character_job": character_job,
             "maps": rows,
+        }
+    )
+
+
+@app.get("/api/my-games")
+def api_my_games():
+    start_raw = request.args.get("start_round", str(DEFAULT_START_ROUND))
+    end_raw = request.args.get("end_round", str(DEFAULT_END_ROUND))
+    query_text = request.args.get("q", "").strip()
+
+    try:
+        start_round = int(start_raw)
+        end_round = int(end_raw)
+    except ValueError:
+        return jsonify({"error": "start_round and end_round must be integers."}), 400
+
+    if start_round > end_round:
+        return jsonify({"error": "start_round must be less than or equal to end_round."}), 400
+    if not query_text:
+        return jsonify({"error": "Please enter a character name or username."}), 400
+
+    games = get_my_games(DEFAULT_DB_URL, start_round, end_round, query_text)
+    return jsonify(
+        {
+            "start_round": start_round,
+            "end_round": end_round,
+            "query": query_text,
+            "games": games,
         }
     )
 

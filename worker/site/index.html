@@ -222,11 +222,11 @@
         <form id="range-form">
             <label>
                 Start round
-                <input type="number" id="start-round" value="{{ default_start_round }}" required>
+                <input type="number" id="start-round" value="10300" required>
             </label>
             <label>
                 End round
-                <input type="number" id="end-round" value="{{ default_end_round }}" required>
+                <input type="number" id="end-round" value="10400" required>
             </label>
             <label>
                 Character name contains
@@ -344,6 +344,7 @@
         </div>
     </div>
 </div>
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="/app.js"></script>
 </body>
 </html>
+

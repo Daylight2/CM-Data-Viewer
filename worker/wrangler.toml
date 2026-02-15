@@ -1,0 +1,17 @@
+name = "cm-data-viewer"
+main = "src/index.js"
+compatibility_date = "2026-02-15"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./site"
+binding = "ASSETS"
+
+# Option A: use a DATABASE_URL secret
+# wrangler secret put DATABASE_URL
+
+# Option B (recommended): use Hyperdrive and comment out DATABASE_URL usage
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "YOUR_HYPERDRIVE_ID"
+# localConnectionString = "postgresql://postgres:password@localhost:5432/cm_data"

@@ -1,12 +1,12 @@
 CREATE TABLE IF NOT EXISTS rounds (
     round_id BIGINT PRIMARY KEY,
-    map_name TEXT NOT NULL,
-    duration_text TEXT NOT NULL,
-    round_date DATE NOT NULL,
-    round_end_text TEXT NOT NULL,
+    map_name TEXT,
+    duration_text TEXT,
+    round_date DATE,
+    round_end_text TEXT,
     round_result_key TEXT,
-    download_link TEXT NOT NULL,
-    source_url TEXT NOT NULL,
+    download_link TEXT,
+    source_url TEXT,
     scraped_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -14,9 +14,9 @@ CREATE TABLE IF NOT EXISTS round_players (
     id BIGSERIAL PRIMARY KEY,
     round_id BIGINT NOT NULL REFERENCES rounds(round_id) ON DELETE CASCADE,
     player_guid UUID,
-    username TEXT NOT NULL,
-    character_name TEXT NOT NULL,
-    job TEXT NOT NULL,
+    username TEXT,
+    character_name TEXT,
+    job TEXT,
     is_antag BOOLEAN NOT NULL DEFAULT FALSE
 );
 

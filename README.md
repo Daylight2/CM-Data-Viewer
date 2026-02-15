@@ -44,3 +44,36 @@ python scrape_replay_to_postgres.py --db-url "postgresql://user:password@localho
 - `round_id` is upserted in `rounds`.
 - Existing `round_players` rows for that `round_id` are replaced on each run.
 - `round_result_key` is derived by matching known canonical end-text variants.
+
+## Cloudflare Deployment (Workers)
+This repo now includes a Cloudflare Worker deployment target in `worker/`.
+
+### 1. Install and authenticate
+```powershell
+cd worker
+npm install
+npx wrangler login
+```
+
+### 2. Set DB connection
+Use a Cloudflare secret:
+```powershell
+npx wrangler secret put DATABASE_URL
+```
+Paste your Postgres DSN when prompted.
+
+Optional: use Hyperdrive instead by configuring `worker/wrangler.toml`.
+
+### 3. Run locally
+```powershell
+npm run dev
+```
+
+### 4. Deploy
+```powershell
+npm run deploy
+```
+
+The Worker serves:
+- static site from `worker/site/`
+- API endpoints from `worker/src/index.js`

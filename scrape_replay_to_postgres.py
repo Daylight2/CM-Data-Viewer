@@ -49,29 +49,29 @@ RESULT_TEXT_TO_BUCKET = [
 
 SECRETS_FILE = "local_secrets.json"
 DEFAULT_URL_TEMPLATE = "https://replays.iterator.systems/replay/rmc14/alamo/{round_id}"
-DEFAULT_START_ROUND = 10380
-DEFAULT_END_ROUND = 10429
+DEFAULT_START_ROUND = 1
+DEFAULT_END_ROUND = 10431
 
 
 @dataclass
 class PlayerRecord:
     player_guid: str | None
-    username: str
-    character_name: str
-    job: str
+    username: str | None
+    character_name: str | None
+    job: str | None
     is_antag: bool
 
 
 @dataclass
 class RoundRecord:
     round_id: int
-    map_name: str
-    duration_text: str
-    round_date: date
-    round_end_text: str
+    map_name: str | None
+    duration_text: str | None
+    round_date: date | None
+    round_end_text: str | None
     round_result_key: str | None
-    download_link: str
-    source_url: str
+    download_link: str | None
+    source_url: str | None
     players: list[PlayerRecord]
 
 
@@ -98,6 +98,8 @@ def load_db_url() -> str:
 
 
 def classify_result(round_end_text: str) -> str | None:
+    if not round_end_text:
+        return None
     normalized_end = normalize_text(round_end_text)
     for message, bucket in RESULT_TEXT_TO_BUCKET:
         if normalize_text(message) in normalized_end:
@@ -116,11 +118,11 @@ def extract_label_value_pairs(main_soup: BeautifulSoup) -> dict[str, str]:
     return values
 
 
-def extract_download_link(main_soup: BeautifulSoup) -> str:
+def extract_download_link(main_soup: BeautifulSoup) -> str | None:
     for a in main_soup.select("main a[href]"):
         if a.get_text(strip=True).lower() == "download":
             return a["href"].strip()
-    raise ValueError("Download link not found")
+    return None
 
 
 def extract_replay_id(main_soup: BeautifulSoup) -> int:
@@ -137,7 +139,7 @@ def parse_api_players(api_data: dict[str, Any]) -> list[PlayerRecord]:
     participants = api_data.get("roundParticipants") or []
     for participant in participants:
         player_guid = participant.get("playerGuid")
-        username = participant.get("username") or "Unknown"
+        username = (participant.get("username") or "").strip() or None
         for pl in participant.get("players") or []:
             job_prototypes = pl.get("jobPrototypes") or []
             antag_prototypes = pl.get("antagPrototypes") or []
@@ -145,8 +147,8 @@ def parse_api_players(api_data: dict[str, Any]) -> list[PlayerRecord]:
                 PlayerRecord(
                     player_guid=player_guid,
                     username=username,
-                    character_name=(pl.get("playerIcName") or "Unknown").strip(),
-                    job=(job_prototypes[0] if job_prototypes else "Unknown").strip(),
+                    character_name=((pl.get("playerIcName") or "").strip() or None),
+                    job=(((job_prototypes[0] if job_prototypes else "") or "").strip() or None),
                     is_antag=len(antag_prototypes) > 0,
                 )
             )
@@ -161,40 +163,44 @@ def parse_round_data(url: str, timeout: int = 30) -> RoundRecord:
     soup = BeautifulSoup(response.text, "html.parser")
     values = extract_label_value_pairs(soup)
 
-    map_name = values.get("Maps")
-    duration_text = values.get("Duration")
-    date_text = values.get("Date")
+    map_name = values.get("Maps") or None
+    duration_text = values.get("Duration") or None
+    date_text = values.get("Date") or None
     round_id_text = values.get("Round ID")
+    if not round_id_text:
+        round_id_match = re.search(r"/(\d+)\s*$", url)
+        round_id_text = round_id_match.group(1) if round_id_match else None
+    if not round_id_text or not round_id_text.isdigit():
+        raise ValueError("Round ID missing or invalid; cannot store record without primary key.")
 
-    missing = [
-        k for k, v in {
-            "Maps": map_name,
-            "Duration": duration_text,
-            "Date": date_text,
-            "Round ID": round_id_text,
-        }.items() if not v
-    ]
-    if missing:
-        raise ValueError(f"Missing required fields in HTML: {', '.join(missing)}")
-
-    replay_id = extract_replay_id(soup)
-    api_url = urljoin(url, f"/api/Replay/{replay_id}")
-    api_response = session.get(api_url, timeout=timeout)
-    api_response.raise_for_status()
-    api_data = api_response.json()
-
-    round_end_text = (api_data.get("roundEndText") or "").strip()
-    if not round_end_text:
-        round_end_text = "No round end text available."
+    api_data: dict[str, Any] = {}
+    players: list[PlayerRecord] = []
+    round_end_text: str | None = None
+    try:
+        replay_id = extract_replay_id(soup)
+        api_url = urljoin(url, f"/api/Replay/{replay_id}")
+        api_response = session.get(api_url, timeout=timeout)
+        api_response.raise_for_status()
+        api_data = api_response.json()
+        round_end_text = (api_data.get("roundEndText") or "").strip() or None
+        players = parse_api_players(api_data)
+    except Exception:
+        # If API details are unavailable/unexpected, keep nullable fields as NULL.
+        pass
 
     download_link = extract_download_link(soup)
-    players = parse_api_players(api_data)
+    parsed_date = None
+    if date_text:
+        try:
+            parsed_date = date.fromisoformat(date_text)
+        except ValueError:
+            parsed_date = None
 
     return RoundRecord(
         round_id=int(round_id_text),
         map_name=map_name,
         duration_text=duration_text,
-        round_date=date.fromisoformat(date_text),
+        round_date=parsed_date,
         round_end_text=round_end_text,
         round_result_key=classify_result(round_end_text),
         download_link=download_link,
@@ -208,17 +214,23 @@ def ensure_schema(conn: psycopg.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS rounds (
             round_id BIGINT PRIMARY KEY,
-            map_name TEXT NOT NULL,
-            duration_text TEXT NOT NULL,
-            round_date DATE NOT NULL,
-            round_end_text TEXT NOT NULL,
+            map_name TEXT,
+            duration_text TEXT,
+            round_date DATE,
+            round_end_text TEXT,
             round_result_key TEXT,
-            download_link TEXT NOT NULL,
-            source_url TEXT NOT NULL,
+            download_link TEXT,
+            source_url TEXT,
             scraped_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         """
     )
+    conn.execute("ALTER TABLE rounds ALTER COLUMN map_name DROP NOT NULL;")
+    conn.execute("ALTER TABLE rounds ALTER COLUMN duration_text DROP NOT NULL;")
+    conn.execute("ALTER TABLE rounds ALTER COLUMN round_date DROP NOT NULL;")
+    conn.execute("ALTER TABLE rounds ALTER COLUMN round_end_text DROP NOT NULL;")
+    conn.execute("ALTER TABLE rounds ALTER COLUMN download_link DROP NOT NULL;")
+    conn.execute("ALTER TABLE rounds ALTER COLUMN source_url DROP NOT NULL;")
 
     conn.execute(
         """
@@ -226,13 +238,16 @@ def ensure_schema(conn: psycopg.Connection) -> None:
             id BIGSERIAL PRIMARY KEY,
             round_id BIGINT NOT NULL REFERENCES rounds(round_id) ON DELETE CASCADE,
             player_guid UUID,
-            username TEXT NOT NULL,
-            character_name TEXT NOT NULL,
-            job TEXT NOT NULL,
+            username TEXT,
+            character_name TEXT,
+            job TEXT,
             is_antag BOOLEAN NOT NULL DEFAULT FALSE
         );
         """
     )
+    conn.execute("ALTER TABLE round_players ALTER COLUMN username DROP NOT NULL;")
+    conn.execute("ALTER TABLE round_players ALTER COLUMN character_name DROP NOT NULL;")
+    conn.execute("ALTER TABLE round_players ALTER COLUMN job DROP NOT NULL;")
 
     conn.execute(
         """

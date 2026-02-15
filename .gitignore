@@ -1,1 +1,3 @@
 local_secrets.json
+worker/node_modules/
+worker/.wrangler/
