@@ -8,9 +8,6 @@ const RESULT_BUCKETS = [
   "draw",
 ];
 
-let sqlClient = null;
-let sqlKey = null;
-
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -44,11 +41,20 @@ function getDb(env) {
   if (!connectionString) {
     throw new Error("Missing DATABASE_URL (or HYPERDRIVE binding).");
   }
-  if (!sqlClient || sqlKey !== connectionString) {
-    sqlKey = connectionString;
-    sqlClient = postgres(connectionString, { prepare: false, max: 5 });
+  return postgres(connectionString, { prepare: false, max: 1 });
+}
+
+async function withDb(env, fn) {
+  const db = getDb(env);
+  try {
+    return await fn(db);
+  } finally {
+    try {
+      await db.end({ timeout: 1 });
+    } catch {
+      // ignore close errors
+    }
   }
-  return sqlClient;
 }
 
 async function getWinrateRows(db, startRound, endRound, characterName, characterJob) {
@@ -433,11 +439,13 @@ export default {
         const end = parseIntParam(url.searchParams.get("end_round"), 10400);
         if (start == null || end == null) return json({ error: "start_round and end_round must be integers." }, 400);
         if (start > end) return json({ error: "start_round must be less than or equal to end_round." }, 400);
-        const db = getDb(env);
         const characterName = url.searchParams.get("character_name") || null;
         const characterJob = url.searchParams.get("character_job") || null;
-        const wr = await getWinrateRows(db, start, end, characterName, characterJob);
-        const playerCounts = await getPlayerCounts(db, start, end, characterName, characterJob);
+        const { wr, playerCounts } = await withDb(env, async (db) => {
+          const wr = await getWinrateRows(db, start, end, characterName, characterJob);
+          const playerCounts = await getPlayerCounts(db, start, end, characterName, characterJob);
+          return { wr, playerCounts };
+        });
         return json({
           start_round: start,
           end_round: end,
@@ -454,10 +462,11 @@ export default {
         const end = parseIntParam(url.searchParams.get("end_round"), 10400);
         if (start == null || end == null) return json({ error: "start_round and end_round must be integers." }, 400);
         if (start > end) return json({ error: "start_round must be less than or equal to end_round." }, 400);
-        const db = getDb(env);
         const characterName = url.searchParams.get("character_name") || null;
         const username = url.searchParams.get("username") || null;
-        const jobs = await getJobs(db, start, end, characterName, username);
+        const jobs = await withDb(env, (db) =>
+          getJobs(db, start, end, characterName, username)
+        );
         return json({ start_round: start, end_round: end, character_name: characterName, username, jobs });
       }
 
@@ -469,8 +478,9 @@ export default {
         const jobName = decodeURIComponent(
           p.replace("/api/jobs/", "").replace("/players", "")
         );
-        const db = getDb(env);
-        const players = await getPlayersForJob(db, start, end, jobName);
+        const players = await withDb(env, (db) =>
+          getPlayersForJob(db, start, end, jobName)
+        );
         return json({ start_round: start, end_round: end, job: jobName, players });
       }
 
@@ -479,10 +489,11 @@ export default {
         const end = parseIntParam(url.searchParams.get("end_round"), 10400);
         if (start == null || end == null) return json({ error: "start_round and end_round must be integers." }, 400);
         if (start > end) return json({ error: "start_round must be less than or equal to end_round." }, 400);
-        const db = getDb(env);
         const characterName = url.searchParams.get("character_name") || null;
         const characterJob = url.searchParams.get("character_job") || null;
-        const maps = await getMapWinrates(db, start, end, characterName, characterJob);
+        const maps = await withDb(env, (db) =>
+          getMapWinrates(db, start, end, characterName, characterJob)
+        );
         return json({ start_round: start, end_round: end, character_name: characterName, character_job: characterJob, maps });
       }
 
@@ -493,8 +504,9 @@ export default {
         if (start == null || end == null) return json({ error: "start_round and end_round must be integers." }, 400);
         if (start > end) return json({ error: "start_round must be less than or equal to end_round." }, 400);
         if (!q) return json({ error: "Please enter a character name or username." }, 400);
-        const db = getDb(env);
-        const games = await getMyGames(db, start, end, q);
+        const games = await withDb(env, (db) =>
+          getMyGames(db, start, end, q)
+        );
         return json({ start_round: start, end_round: end, query: q, games });
       }
 
