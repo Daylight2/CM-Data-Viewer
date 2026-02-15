@@ -361,15 +361,18 @@ async function fetchLatestRoundId() {
     }
 }
 
-function getSecondsUntilNextHalfHour() {
+function getSecondsUntilNextFiveMinuteMark() {
     const now = new Date();
     const next = new Date(now);
-    next.setSeconds(0, 0);
-    if (now.getMinutes() < 30) {
-        next.setMinutes(30);
-    } else {
+    next.setMilliseconds(0);
+    next.setSeconds(0);
+    const minute = now.getMinutes();
+    const nextMinuteMark = Math.ceil((minute + 1) / 5) * 5;
+    if (nextMinuteMark >= 60) {
         next.setHours(next.getHours() + 1);
         next.setMinutes(0);
+    } else {
+        next.setMinutes(nextMinuteMark);
     }
     return Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
 }
@@ -381,7 +384,7 @@ function startNextRoundCountdown() {
     }
 
     const render = () => {
-        const totalSeconds = getSecondsUntilNextHalfHour();
+        const totalSeconds = getSecondsUntilNextFiveMinuteMark();
         const mm = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
         const ss = String(totalSeconds % 60).padStart(2, "0");
         el.textContent = `Checking for new round in ${mm}:${ss}`;

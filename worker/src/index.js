@@ -7,7 +7,7 @@ const RESULT_BUCKETS = [
   "xeno major",
   "draw",
 ];
-const AUTO_MAX_EMPTY_CHECKS = 10;
+const AUTO_LOOKAHEAD_ROUNDS = 10;
 
 const RESULT_TEXT_TO_BUCKET = [
   [
@@ -636,86 +636,41 @@ async function upsertRound(db, round) {
   }
 }
 
-async function ensureScraperStateTable(db) {
-  await db.unsafe(
-    `
-      CREATE TABLE IF NOT EXISTS public.scraper_state (
-        key TEXT PRIMARY KEY,
-        consecutive_misses INTEGER NOT NULL DEFAULT 0,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-  );
-}
-
-async function getConsecutiveMisses(db) {
-  const rows = await db.unsafe(
-    `SELECT consecutive_misses FROM public.scraper_state WHERE key = 'next_round_poll';`
-  );
-  if (!rows.length) return 0;
-  return Number(rows[0].consecutive_misses || 0);
-}
-
-async function setConsecutiveMisses(db, misses) {
-  await db.unsafe(
-    `
-      INSERT INTO public.scraper_state (key, consecutive_misses, updated_at)
-      VALUES ('next_round_poll', $1, NOW())
-      ON CONFLICT (key)
-      DO UPDATE SET
-        consecutive_misses = EXCLUDED.consecutive_misses,
-        updated_at = NOW();
-    `,
-    [misses]
-  );
-}
-
 async function runAutomaticUpdate(env) {
-  const state = await withDb(env, async (db) => {
-    await ensureScraperStateTable(db);
-    const misses = await getConsecutiveMisses(db);
-    const nextRoundId =
-      misses >= AUTO_MAX_EMPTY_CHECKS ? null : await getNextRoundId(db);
-    return { misses, nextRoundId };
-  });
+  const startRoundId = await withDb(env, (db) => getNextRoundId(db));
+  const found = [];
+  const checked = [];
 
-  if (state.nextRoundId == null) {
-    return {
-      status: "stopped",
-      consecutive_misses: state.misses,
-      max_empty_checks: AUTO_MAX_EMPTY_CHECKS,
-      message: `Auto-scraper paused after ${AUTO_MAX_EMPTY_CHECKS} consecutive misses.`,
-    };
+  for (let i = 0; i < AUTO_LOOKAHEAD_ROUNDS; i += 1) {
+    const roundId = startRoundId + i;
+    const scraped = await scrapeRound(roundId);
+    checked.push(roundId);
+    if (!scraped.exists) {
+      continue;
+    }
+    found.push(scraped.round);
   }
 
-  const scraped = await scrapeRound(state.nextRoundId);
-  if (!scraped.exists) {
-    const nextMisses = state.misses + 1;
-    await withDb(env, async (db) => {
-      await ensureScraperStateTable(db);
-      await setConsecutiveMisses(db, nextMisses);
-    });
+  if (!found.length) {
     return {
       status: "no_new_round",
-      next_round_id: state.nextRoundId,
-      consecutive_misses: nextMisses,
-      max_empty_checks: AUTO_MAX_EMPTY_CHECKS,
-      message: `No new round at ${state.nextRoundId}. Miss ${nextMisses}/${AUTO_MAX_EMPTY_CHECKS}.`,
+      checked_rounds: checked,
+      message: `No new rounds found in ${startRoundId}-${startRoundId + AUTO_LOOKAHEAD_ROUNDS - 1}.`,
     };
   }
 
   await withDb(env, async (db) => {
-    await ensureScraperStateTable(db);
-    await upsertRound(db, scraped.round);
-    await setConsecutiveMisses(db, 0);
+    for (const round of found) {
+      await upsertRound(db, round);
+    }
   });
+
   return {
     status: "inserted",
-    next_round_id: scraped.round.round_id,
-    inserted_players: (scraped.round.players || []).length,
-    replay_url: scraped.replay_url,
-    consecutive_misses: 0,
-    message: `Inserted round ${scraped.round.round_id}.`,
+    inserted_round_ids: found.map((r) => r.round_id),
+    inserted_rounds: found.length,
+    checked_rounds: checked,
+    message: `Inserted ${found.length} round(s): ${found.map((r) => r.round_id).join(", ")}.`,
   };
 }
 

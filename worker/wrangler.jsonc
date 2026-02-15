@@ -8,6 +8,6 @@
     "binding": "ASSETS"
   },
   "triggers": {
-    "crons": ["*/30 * * * *"]
+    "crons": ["*/5 * * * *"]
   }
 }
