@@ -1,5 +1,5 @@
 {
-  "name": "rmc14stats",
+  "name": "cm-data",
   "main": "worker/src/index.js",
   "compatibility_date": "2026-02-15",
   "compatibility_flags": ["nodejs_compat"],
