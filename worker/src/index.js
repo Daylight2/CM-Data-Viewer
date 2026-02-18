@@ -137,7 +137,7 @@ function parseRoundPageHtml(html, fallbackRoundId) {
 }
 
 function parseApiPlayers(apiData) {
-  const out = [];
+  const deduped = new Map();
   const participants = Array.isArray(apiData?.roundParticipants)
     ? apiData.roundParticipants
     : [];
@@ -154,16 +154,35 @@ function parseApiPlayers(apiData) {
     for (const p of players) {
       const jobs = Array.isArray(p?.jobPrototypes) ? p.jobPrototypes : [];
       const antags = Array.isArray(p?.antagPrototypes) ? p.antagPrototypes : [];
-      out.push({
+      const row = {
         player_guid: playerGuid,
         username,
         character_name: (p?.playerIcName || "").trim() || null,
         job: (jobs[0] || "").trim() || null,
         is_antag: antags.length > 0,
-      });
+      };
+
+      // The replay API can emit multiple entries for the same person in a round.
+      // Count one person once per round, preferring GUID over username for identity.
+      const dedupeKey =
+        (row.player_guid && `guid:${row.player_guid.toLowerCase()}`) ||
+        (row.username && `user:${row.username.toLowerCase()}`) ||
+        `row:${row.character_name || ""}|${row.job || ""}|${row.is_antag ? "1" : "0"}`;
+
+      const existing = deduped.get(dedupeKey);
+      if (!existing) {
+        deduped.set(dedupeKey, row);
+        continue;
+      }
+
+      existing.player_guid = existing.player_guid || row.player_guid;
+      existing.username = existing.username || row.username;
+      existing.character_name = existing.character_name || row.character_name;
+      existing.job = existing.job || row.job;
+      existing.is_antag = Boolean(existing.is_antag || row.is_antag);
     }
   }
-  return out;
+  return Array.from(deduped.values());
 }
 
 function getDb(env) {

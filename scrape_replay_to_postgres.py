@@ -144,7 +144,7 @@ def extract_replay_id(main_soup: BeautifulSoup) -> int:
 
 
 def parse_api_players(api_data: dict[str, Any]) -> list[PlayerRecord]:
-    players: list[PlayerRecord] = []
+    deduped: dict[str, PlayerRecord] = {}
     participants = api_data.get("roundParticipants") or []
     for participant in participants:
         player_guid = participant.get("playerGuid")
@@ -152,16 +152,34 @@ def parse_api_players(api_data: dict[str, Any]) -> list[PlayerRecord]:
         for pl in participant.get("players") or []:
             job_prototypes = pl.get("jobPrototypes") or []
             antag_prototypes = pl.get("antagPrototypes") or []
-            players.append(
-                PlayerRecord(
-                    player_guid=player_guid,
-                    username=username,
-                    character_name=((pl.get("playerIcName") or "").strip() or None),
-                    job=(((job_prototypes[0] if job_prototypes else "") or "").strip() or None),
-                    is_antag=len(antag_prototypes) > 0,
-                )
+            row = PlayerRecord(
+                player_guid=player_guid,
+                username=username,
+                character_name=((pl.get("playerIcName") or "").strip() or None),
+                job=(((job_prototypes[0] if job_prototypes else "") or "").strip() or None),
+                is_antag=len(antag_prototypes) > 0,
             )
-    return players
+
+            # The replay API can emit multiple entries for the same person in a round.
+            # Count one person once per round, preferring GUID over username for identity.
+            dedupe_key = (
+                (f"guid:{row.player_guid.lower()}" if row.player_guid else None)
+                or (f"user:{row.username.lower()}" if row.username else None)
+                or f"row:{row.character_name or ''}|{row.job or ''}|{'1' if row.is_antag else '0'}"
+            )
+
+            existing = deduped.get(dedupe_key)
+            if existing is None:
+                deduped[dedupe_key] = row
+                continue
+
+            existing.player_guid = existing.player_guid or row.player_guid
+            existing.username = existing.username or row.username
+            existing.character_name = existing.character_name or row.character_name
+            existing.job = existing.job or row.job
+            existing.is_antag = bool(existing.is_antag or row.is_antag)
+
+    return list(deduped.values())
 
 
 def parse_round_data(url: str, timeout: int = 30) -> RoundRecord:
