@@ -1,5 +1,4 @@
 let chartInstance = null;
-let playersChartInstance = null;
 let selectedJob = null;
 let allJobs = [];
 let allPlayersForSelectedJob = [];
@@ -76,84 +75,6 @@ function renderChart(results) {
                         label(context) {
                             return `${context.label}: ${context.parsed.toFixed(2)}%`;
                         }
-                    }
-                }
-            }
-        }
-    });
-}
-
-function renderPlayersChart(points) {
-    const ctx = document.getElementById("players-chart").getContext("2d");
-    const labels = points.map((p) => p.round_id);
-    const values = points.map((p) => p.player_count);
-    const rollingWr = points.map((p) => p.marine_wr_rolling_20_pct);
-
-    if (playersChartInstance) {
-        playersChartInstance.destroy();
-    }
-
-    playersChartInstance = new Chart(ctx, {
-        type: "line",
-        data: {
-            labels,
-            datasets: [
-                {
-                    label: "Players",
-                    data: values,
-                    borderColor: "#3fa2ff",
-                    backgroundColor: "rgba(63, 162, 255, 0.2)",
-                    fill: true,
-                    tension: 0.2,
-                    pointRadius: 2,
-                    yAxisID: "yPlayers"
-                },
-                {
-                    label: "Marine WR% (Rolling 20)",
-                    data: rollingWr,
-                    borderColor: "#40c057",
-                    backgroundColor: "rgba(64, 192, 87, 0.15)",
-                    fill: false,
-                    tension: 0.2,
-                    spanGaps: true,
-                    pointRadius: 2,
-                    yAxisID: "yWr"
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    labels: { color: "#e6edf3" }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: { color: "#9db0c0" },
-                    grid: { color: "rgba(157, 176, 192, 0.2)" }
-                },
-                yPlayers: {
-                    type: "linear",
-                    position: "left",
-                    beginAtZero: true,
-                    ticks: { color: "#9db0c0" },
-                    grid: { color: "rgba(157, 176, 192, 0.2)" }
-                },
-                yWr: {
-                    type: "linear",
-                    position: "right",
-                    beginAtZero: true,
-                    min: 0,
-                    max: 100,
-                    ticks: {
-                        color: "#9db0c0",
-                        callback(value) {
-                            return `${value}%`;
-                        }
-                    },
-                    grid: {
-                        drawOnChartArea: false
                     }
                 }
             }
@@ -616,7 +537,6 @@ async function fetchAndRender(startRound, endRound, characterName, characterJob)
 
     renderTable(payload.results);
     renderChart(payload.results);
-    renderPlayersChart(payload.player_counts);
     const nameText = payload.character_name ? ` | Character filter: ${payload.character_name}` : "";
     const jobText = payload.character_job ? ` | Job filter: ${payload.character_job}` : "";
     metaEl.textContent = `Rounds ${payload.start_round}-${payload.end_round} | Matched rounds: ${payload.total_rounds}${nameText}${jobText}`;
