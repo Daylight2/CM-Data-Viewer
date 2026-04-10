@@ -90,6 +90,26 @@
             gap: 16px;
         }
 
+        .chart-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            background: #0f1a22;
+        }
+
+        .chart-card canvas {
+            width: 100%;
+        }
+
+        .player-count-chart-wrap {
+            margin-top: 18px;
+        }
+
+        .player-count-chart-box {
+            position: relative;
+            height: 300px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -301,7 +321,9 @@
         <div class="tab-content active" id="tab-winrates">
             <div class="grid">
                 <div>
-                    <canvas id="winrate-chart" width="400" height="400"></canvas>
+                    <div class="chart-card">
+                        <canvas id="winrate-chart" width="400" height="400"></canvas>
+                    </div>
                 </div>
                 <div>
                     <table>
@@ -315,6 +337,13 @@
                         <tbody id="results-body"></tbody>
                     </table>
                 </div>
+            </div>
+            <div class="player-count-chart-wrap">
+                <div class="section-title">Unique Player Counts By Round</div>
+                <div class="chart-card player-count-chart-box">
+                    <canvas id="player-count-chart"></canvas>
+                </div>
+                <div class="meta" id="player-count-empty" hidden>No rounds matched the current filters.</div>
             </div>
         </div>
         <div class="tab-content" id="tab-jobs">

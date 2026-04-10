@@ -1,4 +1,5 @@
 let chartInstance = null;
+let playerCountChartInstance = null;
 let selectedJob = null;
 let allJobs = [];
 let allPlayersForSelectedJob = [];
@@ -75,6 +76,83 @@ function renderChart(results) {
                         label(context) {
                             return `${context.label}: ${context.parsed.toFixed(2)}%`;
                         }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderPlayerCountChart(points) {
+    const ctx = document.getElementById("player-count-chart").getContext("2d");
+    const emptyEl = document.getElementById("player-count-empty");
+    const labels = points.map((point) => String(point.round_id));
+    const counts = points.map((point) => point.player_count);
+
+    if (playerCountChartInstance) {
+        playerCountChartInstance.destroy();
+    }
+
+    if (!points.length) {
+        emptyEl.hidden = false;
+        return;
+    }
+
+    emptyEl.hidden = true;
+    playerCountChartInstance = new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels,
+            datasets: [{
+                label: "Unique players",
+                data: counts,
+                backgroundColor: "rgba(63, 162, 255, 0.45)",
+                borderColor: "#3fa2ff",
+                borderWidth: 1,
+                borderRadius: 4,
+                maxBarThickness: 24
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: "#e6edf3"
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        title(items) {
+                            return `Round ${items[0].label}`;
+                        },
+                        label(context) {
+                            return `Unique players: ${context.parsed.y}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: "#9db0c0",
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 12
+                    },
+                    grid: {
+                        color: "rgba(42, 58, 71, 0.35)"
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: "#9db0c0",
+                        precision: 0
+                    },
+                    grid: {
+                        color: "rgba(42, 58, 71, 0.6)"
                     }
                 }
             }
@@ -537,6 +615,7 @@ async function fetchAndRender(startRound, endRound, characterName, characterJob)
 
     renderTable(payload.results);
     renderChart(payload.results);
+    renderPlayerCountChart(payload.player_counts || []);
     const nameText = payload.character_name ? ` | Character filter: ${payload.character_name}` : "";
     const jobText = payload.character_job ? ` | Job filter: ${payload.character_job}` : "";
     metaEl.textContent = `Rounds ${payload.start_round}-${payload.end_round} | Matched rounds: ${payload.total_rounds}${nameText}${jobText}`;

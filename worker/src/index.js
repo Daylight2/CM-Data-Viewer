@@ -345,11 +345,31 @@ async function getPlayerCounts(db, startRound, endRound, characterName, characte
             )
       ),
       player_counts AS (
-          SELECT fr.round_id, COUNT(rp.id)::int AS player_count
+          SELECT
+              fr.round_id,
+              COUNT(
+                  DISTINCT COALESCE(
+                      NULLIF(LOWER(BTRIM(rp.username)), ''),
+                      CASE
+                          WHEN rp.player_guid IS NOT NULL THEN 'guid:' || LOWER(rp.player_guid::text)
+                          ELSE NULL
+                      END,
+                      'row:' || rp.id::text
+                  )
+              )::int AS player_count
           FROM filtered_rounds fr
           LEFT JOIN public.round_players rp ON rp.round_id = fr.round_id
           GROUP BY fr.round_id
-          HAVING COUNT(rp.id) > 0
+          HAVING COUNT(
+              DISTINCT COALESCE(
+                  NULLIF(LOWER(BTRIM(rp.username)), ''),
+                  CASE
+                      WHEN rp.player_guid IS NOT NULL THEN 'guid:' || LOWER(rp.player_guid::text)
+                      ELSE NULL
+                  END,
+                  'row:' || rp.id::text
+              )
+          ) > 0
       ),
       decisive AS (
           SELECT
