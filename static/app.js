@@ -83,11 +83,40 @@ function renderChart(results) {
     });
 }
 
+function bucketPlayerCountPoints(points, maxBars = 100) {
+    if (points.length <= maxBars) {
+        return points.map((point) => ({
+            label: String(point.round_id),
+            player_count: point.player_count
+        }));
+    }
+
+    const bucketSize = Math.ceil(points.length / maxBars);
+    const buckets = [];
+
+    for (let index = 0; index < points.length; index += bucketSize) {
+        const slice = points.slice(index, index + bucketSize);
+        const firstRound = slice[0].round_id;
+        const lastRound = slice[slice.length - 1].round_id;
+        const averageCount = Math.round(
+            slice.reduce((sum, point) => sum + point.player_count, 0) / slice.length
+        );
+
+        buckets.push({
+            label: firstRound === lastRound ? String(firstRound) : `${firstRound}-${lastRound}`,
+            player_count: averageCount
+        });
+    }
+
+    return buckets;
+}
+
 function renderPlayerCountChart(points) {
     const ctx = document.getElementById("player-count-chart").getContext("2d");
     const emptyEl = document.getElementById("player-count-empty");
-    const labels = points.map((point) => String(point.round_id));
-    const counts = points.map((point) => point.player_count);
+    const chartPoints = bucketPlayerCountPoints(points);
+    const labels = chartPoints.map((point) => point.label);
+    const counts = chartPoints.map((point) => point.player_count);
 
     if (playerCountChartInstance) {
         playerCountChartInstance.destroy();
