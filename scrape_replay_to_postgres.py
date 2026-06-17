@@ -84,7 +84,6 @@ class RoundRecord:
     round_end_text: str | None
     round_result_key: str | None
     download_link: str | None
-    source_url: str | None
     players: list[PlayerRecord]
 
 
@@ -235,7 +234,6 @@ def parse_round_data(url: str, timeout: int = 30) -> RoundRecord:
         round_end_text=round_end_text,
         round_result_key=classify_result(round_end_text),
         download_link=download_link,
-        source_url=url,
         players=players,
     )
 
@@ -250,9 +248,7 @@ def ensure_schema(conn: psycopg.Connection) -> None:
             round_date DATE,
             round_end_text TEXT,
             round_result_key TEXT,
-            download_link TEXT,
-            source_url TEXT,
-            scraped_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            download_link TEXT
         );
         """
     )
@@ -261,7 +257,6 @@ def ensure_schema(conn: psycopg.Connection) -> None:
     conn.execute("ALTER TABLE rounds ALTER COLUMN round_date DROP NOT NULL;")
     conn.execute("ALTER TABLE rounds ALTER COLUMN round_end_text DROP NOT NULL;")
     conn.execute("ALTER TABLE rounds ALTER COLUMN download_link DROP NOT NULL;")
-    conn.execute("ALTER TABLE rounds ALTER COLUMN source_url DROP NOT NULL;")
 
     conn.execute(
         """
@@ -293,9 +288,9 @@ def upsert_round(conn: psycopg.Connection, round_data: RoundRecord) -> None:
         """
         INSERT INTO rounds (
             round_id, map_name, duration_text, round_date, round_end_text,
-            round_result_key, download_link, source_url
+            round_result_key, download_link
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (round_id)
         DO UPDATE SET
             map_name = EXCLUDED.map_name,
@@ -303,9 +298,7 @@ def upsert_round(conn: psycopg.Connection, round_data: RoundRecord) -> None:
             round_date = EXCLUDED.round_date,
             round_end_text = EXCLUDED.round_end_text,
             round_result_key = EXCLUDED.round_result_key,
-            download_link = EXCLUDED.download_link,
-            source_url = EXCLUDED.source_url,
-            scraped_at = NOW();
+            download_link = EXCLUDED.download_link;
         """,
         (
             round_data.round_id,
@@ -315,7 +308,6 @@ def upsert_round(conn: psycopg.Connection, round_data: RoundRecord) -> None:
             round_data.round_end_text,
             round_data.round_result_key,
             round_data.download_link,
-            round_data.source_url,
         ),
     )
 
@@ -360,7 +352,6 @@ def print_round_json(round_data: RoundRecord) -> None:
                 "round_result_key": round_data.round_result_key,
                 "round_end_text": round_data.round_end_text,
                 "download_link": round_data.download_link,
-                "source_url": round_data.source_url,
                 "players": [
                     {
                         "player_guid": p.player_guid,

@@ -658,7 +658,6 @@ async function scrapeRound(roundId) {
       round_end_text: apiData.roundEndText,
       round_result_key: classifyResult(apiData.roundEndText),
       download_link: parsed.download_link,
-      source_url: page.replayUrl,
       players: parseApiPlayers(apiData),
     },
     replay_url: page.replayUrl,
@@ -670,9 +669,9 @@ async function upsertRound(db, round) {
     `
       INSERT INTO public.rounds (
           round_id, map_name, duration_text, round_date, round_end_text,
-          round_result_key, download_link, source_url
+          round_result_key, download_link
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (round_id)
       DO UPDATE SET
           map_name = EXCLUDED.map_name,
@@ -680,9 +679,7 @@ async function upsertRound(db, round) {
           round_date = EXCLUDED.round_date,
           round_end_text = EXCLUDED.round_end_text,
           round_result_key = EXCLUDED.round_result_key,
-          download_link = EXCLUDED.download_link,
-          source_url = EXCLUDED.source_url,
-          scraped_at = NOW();
+          download_link = EXCLUDED.download_link;
     `,
     [
       round.round_id,
@@ -692,7 +689,6 @@ async function upsertRound(db, round) {
       round.round_end_text,
       round.round_result_key,
       round.download_link,
-      round.source_url,
     ]
   );
 

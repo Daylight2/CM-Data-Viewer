@@ -5,9 +5,7 @@ CREATE TABLE IF NOT EXISTS rounds (
     round_date DATE,
     round_end_text TEXT,
     round_result_key TEXT,
-    download_link TEXT,
-    source_url TEXT,
-    scraped_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    download_link TEXT
 );
 
 CREATE TABLE IF NOT EXISTS round_players (
