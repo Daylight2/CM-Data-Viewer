@@ -47,6 +47,10 @@ RESULT_TEXT_TO_BUCKET = [
         "xeno minor",
     ),
     (
+        "[color=yellow]The ship was scuttled by emergency reactor overload. Marines and xenonids alike were consumed in the blast. No side can claim the vessel.[/color]",
+        "xeno minor",
+    ),
+    (
         "Neither marines nor xenonids survived the carnage. The battlefield lies silent, a graveyard for both.",
         "draw",
     ),
