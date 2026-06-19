@@ -6,6 +6,19 @@ let allPlayersForSelectedJob = [];
 let playerSort = { key: "games", dir: "desc" };
 let mapSort = { key: "total_rounds", dir: "desc" };
 
+function initializeNoticeBanner() {
+    const banner = document.getElementById("notice-banner");
+    const dismissButton = document.getElementById("notice-banner-dismiss");
+
+    if (!banner || !dismissButton) {
+        return;
+    }
+
+    dismissButton.addEventListener("click", () => {
+        banner.hidden = true;
+    });
+}
+
 function parseSearchInput(value) {
     const raw = (value || "").trim();
     const strict = raw.length >= 2 && raw.startsWith("\"") && raw.endsWith("\"");
@@ -850,6 +863,7 @@ async function initializeDashboard() {
 initializeDashboard().catch((err) => {
     document.getElementById("error").textContent = err.message;
 });
+initializeNoticeBanner();
 startNextRoundCountdown();
 updateSortHeaderLabels();
 updateMapSortHeaderLabels();

@@ -24,6 +24,47 @@
             color: var(--text);
         }
 
+        .notice-banner {
+            background: #a61d24;
+            border-bottom: 1px solid #d44f56;
+            color: #fff4f4;
+        }
+
+        .notice-banner[hidden] {
+            display: none;
+        }
+
+        .notice-banner-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        .notice-banner-copy {
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .notice-banner-copy p {
+            margin: 0;
+        }
+
+        .notice-banner-copy p + p {
+            margin-top: 10px;
+        }
+
+        .notice-banner-dismiss {
+            flex: 0 0 auto;
+            border-color: #fff4f4;
+            background: #fff4f4;
+            color: #7c1318;
+            white-space: nowrap;
+        }
+
         .wrap {
             max-width: 960px;
             margin: 24px auto;
@@ -262,6 +303,14 @@
             .latest-round {
                 text-align: left;
             }
+
+            .notice-banner-inner {
+                flex-direction: column;
+            }
+
+            .notice-banner-dismiss {
+                width: 100%;
+            }
         }
 
         .footer-note {
@@ -283,6 +332,16 @@
     </style>
 </head>
 <body>
+<div class="notice-banner" id="notice-banner">
+    <div class="notice-banner-inner">
+        <div class="notice-banner-copy">
+            <p>I am seeking an explanation from staff for a Discord ban that I believe followed an appeal to a 30 minute mute, despite following the stated appeal process and not discussing it outside the ticket.</p>
+            <p>The game is great, but I encourage players to read the rules closely, including what can and cannot be appealed and how decisions are treated when they go unchallenged.</p>
+            <p>I will keep paying for this website out of my own pocket because I appreciate the community, but this message will stay up until someone on staff tells me the reason for the Discord ban. Signed, daylight.txt</p>
+        </div>
+        <button type="button" class="notice-banner-dismiss" id="notice-banner-dismiss">I understand</button>
+    </div>
+</div>
 <div class="wrap">
     <div class="panel">
         <div class="top-row">
