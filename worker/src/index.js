@@ -63,6 +63,40 @@ function json(data, status = 200) {
   });
 }
 
+async function readJsonBody(request) {
+  const raw = await request.text();
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function logNoticeAcknowledged(request, payload = {}) {
+  const url = new URL(request.url);
+  const cf = request.cf || {};
+
+  console.log(
+    JSON.stringify({
+      event: "notice_acknowledged",
+      path: url.pathname,
+      page_path:
+        typeof payload.page_path === "string" && payload.page_path
+          ? payload.page_path
+          : "/",
+      source:
+        typeof payload.source === "string" && payload.source
+          ? payload.source
+          : "notice-banner-dismiss",
+      country: cf.country || null,
+      colo: cf.colo || null,
+      user_agent: request.headers.get("user-agent"),
+    })
+  );
+}
+
 function parseIntParam(value, fallback) {
   const n = Number(value ?? fallback);
   return Number.isInteger(n) ? n : null;
@@ -891,6 +925,12 @@ export default {
       if (p === "/api/latest-round") {
         const latestRoundId = await withDbRetry(env, (db) => getLatestRoundId(db));
         return json({ latest_round_id: latestRoundId });
+      }
+
+      if (p === "/api/notice-acknowledged" && request.method === "POST") {
+        const payload = await readJsonBody(request);
+        logNoticeAcknowledged(request, payload);
+        return new Response(null, { status: 204 });
       }
 
       if (p === "/api/auto-update-now" && request.method === "POST") {

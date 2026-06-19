@@ -6,6 +6,33 @@ let allPlayersForSelectedJob = [];
 let playerSort = { key: "games", dir: "desc" };
 let mapSort = { key: "total_rounds", dir: "desc" };
 
+function trackNoticeAcknowledged() {
+    const body = JSON.stringify({
+        page_path: window.location.pathname,
+        source: "notice-banner-dismiss"
+    });
+
+    if (navigator.sendBeacon) {
+        try {
+            const blob = new Blob([body], { type: "application/json" });
+            if (navigator.sendBeacon("/api/notice-acknowledged", blob)) {
+                return;
+            }
+        } catch {
+            // Fall through to fetch keepalive.
+        }
+    }
+
+    fetch("/api/notice-acknowledged", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        keepalive: true
+    }).catch(() => {
+        // Ignore tracking failures.
+    });
+}
+
 function initializeNoticeBanner() {
     const banner = document.getElementById("notice-banner");
     const dismissButton = document.getElementById("notice-banner-dismiss");
@@ -15,6 +42,7 @@ function initializeNoticeBanner() {
     }
 
     dismissButton.addEventListener("click", () => {
+        trackNoticeAcknowledged();
         banner.hidden = true;
     });
 }
