@@ -33,12 +33,31 @@ function trackNoticeAcknowledged() {
     });
 }
 
-function initializeNoticeBanner() {
+async function fetchClientContext() {
+    const resp = await fetch("/api/client-context");
+    const payload = await resp.json();
+    if (!resp.ok) {
+        throw new Error(payload.error || "Failed to load client context.");
+    }
+    return payload;
+}
+
+async function initializeNoticeBanner() {
     const banner = document.getElementById("notice-banner");
     const dismissButton = document.getElementById("notice-banner-dismiss");
 
     if (!banner || !dismissButton) {
         return;
+    }
+
+    try {
+        const clientContext = await fetchClientContext();
+        if (String(clientContext.country || "").toUpperCase() === "EE") {
+            banner.hidden = true;
+            return;
+        }
+    } catch {
+        // Leave the banner visible if country detection fails.
     }
 
     dismissButton.addEventListener("click", () => {
@@ -891,7 +910,9 @@ async function initializeDashboard() {
 initializeDashboard().catch((err) => {
     document.getElementById("error").textContent = err.message;
 });
-initializeNoticeBanner();
+initializeNoticeBanner().catch(() => {
+    // Ignore banner initialization failures.
+});
 startNextRoundCountdown();
 updateSortHeaderLabels();
 updateMapSortHeaderLabels();

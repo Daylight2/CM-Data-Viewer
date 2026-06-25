@@ -97,6 +97,13 @@ function logNoticeAcknowledged(request, payload = {}) {
   );
 }
 
+function getClientContext(request) {
+  const cf = request.cf || {};
+  return {
+    country: typeof cf.country === "string" && cf.country ? cf.country : null,
+  };
+}
+
 function parseIntParam(value, fallback) {
   const n = Number(value ?? fallback);
   return Number.isInteger(n) ? n : null;
@@ -925,6 +932,10 @@ export default {
       if (p === "/api/latest-round") {
         const latestRoundId = await withDbRetry(env, (db) => getLatestRoundId(db));
         return json({ latest_round_id: latestRoundId });
+      }
+
+      if (p === "/api/client-context") {
+        return json(getClientContext(request));
       }
 
       if (p === "/api/notice-acknowledged" && request.method === "POST") {

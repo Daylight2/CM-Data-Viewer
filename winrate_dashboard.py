@@ -779,6 +779,12 @@ def api_latest_round():
     return jsonify({"latest_round_id": latest_round_id})
 
 
+@app.get("/api/client-context")
+def api_client_context():
+    country = (request.headers.get("CF-IPCountry") or "").strip().upper() or None
+    return jsonify({"country": country})
+
+
 @app.post("/api/manual-scrape-next")
 def api_manual_scrape_next():
     try:
