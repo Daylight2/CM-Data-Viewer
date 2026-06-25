@@ -56,8 +56,10 @@ async function initializeNoticeBanner() {
             banner.hidden = true;
             return;
         }
+        banner.hidden = false;
     } catch {
-        // Leave the banner visible if country detection fails.
+        // Show the banner if country detection fails.
+        banner.hidden = false;
     }
 
     dismissButton.addEventListener("click", () => {
