@@ -60,8 +60,7 @@ async function submitBannerThoughts() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-            message: trimmed,
-            page_path: window.location.pathname
+            message: trimmed
         })
     });
     const payload = await resp.json();
@@ -76,8 +75,9 @@ async function initializeNoticeBanner() {
     const banner = document.getElementById("notice-banner");
     const dismissButton = document.getElementById("notice-banner-dismiss");
     const thoughtsButton = document.getElementById("notice-banner-thoughts");
+    const boardButton = document.getElementById("notice-banner-board");
 
-    if (!banner || !dismissButton || !thoughtsButton) {
+    if (!banner || !dismissButton || !thoughtsButton || !boardButton) {
         return;
     }
 
@@ -104,6 +104,10 @@ async function initializeNoticeBanner() {
         } catch (err) {
             window.alert(err.message);
         }
+    });
+
+    boardButton.addEventListener("click", () => {
+        window.location.href = "/messages";
     });
 }
 

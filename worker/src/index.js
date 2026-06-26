@@ -8,7 +8,6 @@ const RESULT_BUCKETS = [
   "draw",
 ];
 const AUTO_LOOKAHEAD_ROUNDS = 10;
-const MESSAGES_PASSWORD = "whyareyoucrackingthis";
 const MAX_MESSAGE_LENGTH = 2000;
 
 const RESULT_TEXT_TO_BUCKET = [
@@ -112,42 +111,6 @@ function html(body, status = 200, headers = {}) {
     headers: {
       "content-type": "text/html; charset=utf-8",
       ...headers,
-    },
-  });
-}
-
-function parseBasicAuth(request) {
-  const header = request.headers.get("authorization") || "";
-  if (!header.startsWith("Basic ")) {
-    return null;
-  }
-
-  try {
-    const decoded = atob(header.slice(6));
-    const separator = decoded.indexOf(":");
-    if (separator === -1) {
-      return { username: decoded, password: "" };
-    }
-    return {
-      username: decoded.slice(0, separator),
-      password: decoded.slice(separator + 1),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function isMessagesAccessAuthorized(request) {
-  const auth = parseBasicAuth(request);
-  return Boolean(auth && auth.password === MESSAGES_PASSWORD);
-}
-
-function messagesAuthRequiredResponse() {
-  return new Response("Authentication required.", {
-    status: 401,
-    headers: {
-      "content-type": "text/plain; charset=utf-8",
-      "www-authenticate": 'Basic realm="RMC14 Messages"',
     },
   });
 }
@@ -351,11 +314,15 @@ async function ensureMessagesSchema(db) {
     CREATE TABLE IF NOT EXISTS public.messages (
       id BIGSERIAL PRIMARY KEY,
       message TEXT NOT NULL,
-      page_path TEXT,
-      country TEXT,
       user_agent TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+  `);
+  await db.unsafe(`
+    ALTER TABLE public.messages DROP COLUMN IF EXISTS page_path;
+  `);
+  await db.unsafe(`
+    ALTER TABLE public.messages DROP COLUMN IF EXISTS country;
   `);
   await db.unsafe(`
     CREATE INDEX IF NOT EXISTS idx_messages_created_at
@@ -373,20 +340,15 @@ async function createMessage(db, request, payload) {
     throw err;
   }
 
-  const pagePath =
-    typeof payload?.page_path === "string" && payload.page_path.trim()
-      ? payload.page_path.trim().slice(0, 255)
-      : null;
-  const country = getClientContext(request).country;
   const userAgent = request.headers.get("user-agent");
 
   const rows = await db.unsafe(
     `
-      INSERT INTO public.messages (message, page_path, country, user_agent)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO public.messages (message, user_agent)
+      VALUES ($1, $2)
       RETURNING id, created_at;
     `,
-    [normalized.message, pagePath, country, userAgent]
+    [normalized.message, userAgent]
   );
 
   return {
@@ -400,7 +362,7 @@ async function listMessages(db) {
 
   const rows = await db.unsafe(
     `
-      SELECT id, message, page_path, country, user_agent, created_at
+      SELECT id, message, user_agent, created_at
       FROM public.messages
       ORDER BY created_at DESC, id DESC
       LIMIT 200;
@@ -410,8 +372,6 @@ async function listMessages(db) {
   return rows.map((row) => ({
     id: Number(row.id),
     message: String(row.message),
-    page_path: row.page_path || null,
-    country: row.country || null,
     user_agent: row.user_agent || null,
     created_at: row.created_at instanceof Date
       ? row.created_at.toISOString()
@@ -420,9 +380,6 @@ async function listMessages(db) {
 }
 
 async function fetchMessagesPage(request, env) {
-  if (!isMessagesAccessAuthorized(request)) {
-    return messagesAuthRequiredResponse();
-  }
   if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
     const assetUrl = new URL(request.url);
     assetUrl.pathname = "/messages.html";
@@ -434,6 +391,20 @@ async function fetchMessagesPage(request, env) {
     );
   }
   return html("<h1>Messages page is unavailable.</h1>", 500);
+}
+
+async function fetchBannerPage(request, env) {
+  if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+    const assetUrl = new URL(request.url);
+    assetUrl.pathname = "/banner.html";
+    return env.ASSETS.fetch(
+      new Request(assetUrl.toString(), {
+        method: "GET",
+        headers: request.headers,
+      })
+    );
+  }
+  return html("<h1>Banner page is unavailable.</h1>", 500);
 }
 
 async function getWinrateRows(db, startRound, endRound, characterName, characterJob) {
@@ -1002,6 +973,10 @@ export default {
     const p = url.pathname;
 
     try {
+      if (p === "/banner" || p === "/banner.html") {
+        return fetchBannerPage(request, env);
+      }
+
       if (p === "/messages" || p === "/messages.html") {
         return fetchMessagesPage(request, env);
       }
@@ -1100,9 +1075,6 @@ export default {
       }
 
       if (p === "/api/messages" && request.method === "GET") {
-        if (!isMessagesAccessAuthorized(request)) {
-          return messagesAuthRequiredResponse();
-        }
         const messages = await withDbRetry(env, (db) => listMessages(db));
         return json({ messages });
       }

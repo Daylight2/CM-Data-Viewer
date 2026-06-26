@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RMC14 Banner</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='sleeping.png') }}">
+    <style>
+        :root {
+            color-scheme: dark;
+            --text: #e6edf3;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(circle at 20% 0%, #1a2a36 0%, #0d1419 60%);
+            color: var(--text);
+        }
+
+        .notice-banner {
+            background: #a61d24;
+            border-bottom: 1px solid #d44f56;
+            color: #fff4f4;
+        }
+
+        .notice-banner[hidden] {
+            display: none;
+        }
+
+        .notice-banner-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        .notice-banner-copy {
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .notice-banner-copy p {
+            margin: 0;
+        }
+
+        .notice-banner-copy p + p {
+            margin-top: 10px;
+        }
+
+        .notice-banner-actions {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        button {
+            padding: 9px 14px;
+            border: 1px solid #fff4f4;
+            border-radius: 6px;
+            background: #fff4f4;
+            color: #7c1318;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .alt-button {
+            background: transparent;
+            color: #fff4f4;
+            border-color: #ffd8da;
+        }
+
+        .wrap {
+            max-width: 960px;
+            margin: 24px auto;
+            padding: 0 16px;
+        }
+
+        a {
+            color: #3fa2ff;
+        }
+
+        @media (max-width: 800px) {
+            .notice-banner-inner {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="notice-banner" id="notice-banner">
+    <div class="notice-banner-inner">
+        <div class="notice-banner-copy">
+            <p>I am seeking an explanation from staff for a Discord ban that I believe followed an appeal to a 30 minute mute, despite following the stated appeal process and not discussing it outside the ticket.</p>
+            <p>The game is great, but I encourage players to read the rules closely, including what can and cannot be appealed and how decisions are treated when they go unchallenged.</p>
+            <p>I will keep paying for this website out of my own pocket because I appreciate the community, but this message will stay up until someone on staff tells me the reason for the Discord ban. Signed, daylight.txt</p>
+        </div>
+        <div class="notice-banner-actions">
+            <button type="button" id="notice-banner-dismiss">I understand</button>
+            <button type="button" class="alt-button" id="notice-banner-thoughts">Give me your thoughts</button>
+            <button type="button" class="alt-button" id="notice-banner-board">Read message board</button>
+        </div>
+    </div>
+</div>
+<div class="wrap">
+    <p><a href="/">Back to dashboard</a></p>
+</div>
+<script>
+async function submitBannerThoughts() {
+    const message = window.prompt(
+        "Leave a message for daylight.txt. It will be visible on /messages."
+    );
+    if (message === null) {
+        return;
+    }
+
+    const trimmed = message.trim();
+    if (!trimmed) {
+        window.alert("Message not sent. Empty message.");
+        return;
+    }
+
+    const resp = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: trimmed })
+    });
+    const payload = await resp.json();
+    if (!resp.ok) {
+        throw new Error(payload.error || "Failed to submit message.");
+    }
+
+    window.alert("Message sent.");
+}
+
+document.getElementById("notice-banner-dismiss").addEventListener("click", () => {
+    document.getElementById("notice-banner").hidden = true;
+});
+
+document.getElementById("notice-banner-thoughts").addEventListener("click", async () => {
+    try {
+        await submitBannerThoughts();
+    } catch (err) {
+        window.alert(err.message);
+    }
+});
+
+document.getElementById("notice-banner-board").addEventListener("click", () => {
+    window.location.href = "/messages";
+});
+</script>
+</body>
+</html>

@@ -23,8 +23,6 @@ CREATE INDEX IF NOT EXISTS idx_round_players_round_id ON round_players(round_id)
 CREATE TABLE IF NOT EXISTS messages (
     id BIGSERIAL PRIMARY KEY,
     message TEXT NOT NULL,
-    page_path TEXT,
-    country TEXT,
     user_agent TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

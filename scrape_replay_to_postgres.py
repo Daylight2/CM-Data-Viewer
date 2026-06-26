@@ -286,13 +286,13 @@ def ensure_schema(conn: psycopg.Connection) -> None:
         CREATE TABLE IF NOT EXISTS messages (
             id BIGSERIAL PRIMARY KEY,
             message TEXT NOT NULL,
-            page_path TEXT,
-            country TEXT,
             user_agent TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         """
     )
+    conn.execute("ALTER TABLE messages DROP COLUMN IF EXISTS page_path;")
+    conn.execute("ALTER TABLE messages DROP COLUMN IF EXISTS country;")
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_messages_created_at

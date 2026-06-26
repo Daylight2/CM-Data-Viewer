@@ -20,7 +20,6 @@ from scrape_replay_to_postgres import (
 SECRETS_FILE = "local_secrets.json"
 DEFAULT_START_ROUND = 10300
 DEFAULT_END_ROUND = 10400
-MESSAGES_PASSWORD = "whyareyoucrackingthis"
 MAX_MESSAGE_LENGTH = 2000
 
 RESULT_BUCKETS = [
@@ -97,13 +96,13 @@ def ensure_messages_schema(db_url: str) -> None:
                 CREATE TABLE IF NOT EXISTS messages (
                     id BIGSERIAL PRIMARY KEY,
                     message TEXT NOT NULL,
-                    page_path TEXT,
-                    country TEXT,
                     user_agent TEXT,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
                 """
             )
+            conn.execute("ALTER TABLE messages DROP COLUMN IF EXISTS page_path;")
+            conn.execute("ALTER TABLE messages DROP COLUMN IF EXISTS country;")
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_messages_created_at
@@ -115,8 +114,6 @@ def ensure_messages_schema(db_url: str) -> None:
 def create_message(
     db_url: str,
     message: str,
-    page_path: str | None,
-    country: str | None,
     user_agent: str | None,
 ) -> dict[str, str | int]:
     ensure_messages_schema(db_url)
@@ -124,11 +121,11 @@ def create_message(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO messages (message, page_path, country, user_agent)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO messages (message, user_agent)
+                VALUES (%s, %s)
                 RETURNING id, created_at::text;
                 """,
-                (message, page_path, country, user_agent),
+                (message, user_agent),
             )
             message_id, created_at = cur.fetchone()
         conn.commit()
@@ -142,37 +139,22 @@ def get_messages(db_url: str) -> list[dict[str, str | int | None]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, message, page_path, country, user_agent, created_at::text
+                SELECT id, message, user_agent, created_at::text
                 FROM messages
                 ORDER BY created_at DESC, id DESC
                 LIMIT 200;
                 """
             )
-            for message_id, message, page_path, country, user_agent, created_at in cur.fetchall():
+            for message_id, message, user_agent, created_at in cur.fetchall():
                 rows.append(
                     {
                         "id": int(message_id),
                         "message": str(message),
-                        "page_path": str(page_path) if page_path is not None else None,
-                        "country": str(country) if country is not None else None,
                         "user_agent": str(user_agent) if user_agent is not None else None,
                         "created_at": str(created_at),
                     }
                 )
     return rows
-
-
-def is_messages_access_authorized() -> bool:
-    auth = request.authorization
-    return bool(auth and auth.password == MESSAGES_PASSWORD)
-
-
-def messages_auth_response():
-    return (
-        "Authentication required.",
-        401,
-        {"WWW-Authenticate": 'Basic realm="RMC14 Messages"'},
-    )
 
 
 def get_winrate_rows(
@@ -709,9 +691,12 @@ def index():
 
 @app.get("/messages")
 def messages_page():
-    if not is_messages_access_authorized():
-        return messages_auth_response()
     return render_template("messages.html")
+
+
+@app.get("/banner")
+def banner_page():
+    return render_template("banner.html")
 
 
 @app.get("/api/winrates")
@@ -891,19 +876,13 @@ def api_messages():
             return jsonify(
                 {"error": f"Message must be {MAX_MESSAGE_LENGTH} characters or fewer."}
             ), 400
-        page_path_raw = str(payload.get("page_path") or "").strip()
-        page_path = page_path_raw[:255] if page_path_raw else None
         created = create_message(
             DEFAULT_DB_URL,
             message,
-            page_path,
-            (request.headers.get("CF-IPCountry") or "").strip().upper() or None,
             request.headers.get("user-agent"),
         )
         return jsonify({"ok": True, "message": created}), 201
 
-    if not is_messages_access_authorized():
-        return messages_auth_response()
     return jsonify({"messages": get_messages(DEFAULT_DB_URL)})
 
 
