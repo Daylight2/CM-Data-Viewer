@@ -281,6 +281,24 @@ def ensure_schema(conn: psycopg.Connection) -> None:
             ON round_players(round_id);
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS messages (
+            id BIGSERIAL PRIMARY KEY,
+            message TEXT NOT NULL,
+            page_path TEXT,
+            country TEXT,
+            user_agent TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_messages_created_at
+            ON messages(created_at DESC);
+        """
+    )
 
 
 def upsert_round(conn: psycopg.Connection, round_data: RoundRecord) -> None:

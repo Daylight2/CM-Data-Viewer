@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RMC14 Messages</title>
+    <link rel="icon" type="image/png" href="/sleeping.png">
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0d1419;
+            --panel: #152029;
+            --text: #e6edf3;
+            --muted: #9db0c0;
+            --border: #2a3a47;
+            --accent: #3fa2ff;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(circle at 20% 0%, #1a2a36 0%, #0d1419 60%);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 960px;
+            margin: 24px auto;
+            padding: 0 16px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 1.5rem;
+        }
+
+        .meta {
+            color: var(--muted);
+            margin-bottom: 16px;
+        }
+
+        .messages {
+            display: grid;
+            gap: 12px;
+        }
+
+        .message-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            background: #0f1a22;
+        }
+
+        .message-meta {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .message-body {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        a {
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="panel">
+        <h1>Messages</h1>
+        <div class="meta">Latest anonymous responses from the banner button.</div>
+        <div class="meta"><a href="/">Back to dashboard</a></div>
+        <div class="messages" id="messages-list"></div>
+        <div class="meta" id="messages-empty" hidden>No messages yet.</div>
+        <div class="meta" id="messages-error" hidden></div>
+    </div>
+</div>
+<script>
+async function loadMessages() {
+    const list = document.getElementById("messages-list");
+    const empty = document.getElementById("messages-empty");
+    const error = document.getElementById("messages-error");
+
+    try {
+        const resp = await fetch("/api/messages");
+        const payload = await resp.json();
+        if (!resp.ok) {
+            throw new Error(payload.error || "Failed to load messages.");
+        }
+
+        list.innerHTML = "";
+        if (!payload.messages || payload.messages.length === 0) {
+            empty.hidden = false;
+            return;
+        }
+
+        empty.hidden = true;
+        for (const item of payload.messages) {
+            const card = document.createElement("article");
+            card.className = "message-card";
+
+            const meta = document.createElement("div");
+            meta.className = "message-meta";
+            const parts = [item.created_at];
+            if (item.country) parts.push(`Country: ${item.country}`);
+            if (item.page_path) parts.push(`Page: ${item.page_path}`);
+            meta.textContent = parts.join(" | ");
+
+            const body = document.createElement("div");
+            body.className = "message-body";
+            body.textContent = item.message;
+
+            card.appendChild(meta);
+            card.appendChild(body);
+            list.appendChild(card);
+        }
+    } catch (err) {
+        error.hidden = false;
+        error.textContent = err.message;
+    }
+}
+
+loadMessages();
+</script>
+</body>
+</html>

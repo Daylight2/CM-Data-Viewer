@@ -8,6 +8,8 @@ const RESULT_BUCKETS = [
   "draw",
 ];
 const AUTO_LOOKAHEAD_ROUNDS = 10;
+const MESSAGES_PASSWORD = "whyareyoucrackingthis";
+const MAX_MESSAGE_LENGTH = 2000;
 
 const RESULT_TEXT_TO_BUCKET = [
   [
@@ -102,6 +104,63 @@ function getClientContext(request) {
   return {
     country: typeof cf.country === "string" && cf.country ? cf.country : null,
   };
+}
+
+function html(body, status = 200, headers = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      ...headers,
+    },
+  });
+}
+
+function parseBasicAuth(request) {
+  const header = request.headers.get("authorization") || "";
+  if (!header.startsWith("Basic ")) {
+    return null;
+  }
+
+  try {
+    const decoded = atob(header.slice(6));
+    const separator = decoded.indexOf(":");
+    if (separator === -1) {
+      return { username: decoded, password: "" };
+    }
+    return {
+      username: decoded.slice(0, separator),
+      password: decoded.slice(separator + 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isMessagesAccessAuthorized(request) {
+  const auth = parseBasicAuth(request);
+  return Boolean(auth && auth.password === MESSAGES_PASSWORD);
+}
+
+function messagesAuthRequiredResponse() {
+  return new Response("Authentication required.", {
+    status: 401,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "www-authenticate": 'Basic realm="RMC14 Messages"',
+    },
+  });
+}
+
+function normalizeSubmittedMessage(payload) {
+  const message = String(payload?.message || "").trim();
+  if (!message) {
+    return { error: "Message cannot be empty." };
+  }
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return { error: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer.` };
+  }
+  return { message };
 }
 
 function parseIntParam(value, fallback) {
@@ -285,6 +344,96 @@ async function withDbRetry(env, fn, attempts = 3) {
     }
   }
   throw lastErr || new Error("Database retry failed.");
+}
+
+async function ensureMessagesSchema(db) {
+  await db.unsafe(`
+    CREATE TABLE IF NOT EXISTS public.messages (
+      id BIGSERIAL PRIMARY KEY,
+      message TEXT NOT NULL,
+      page_path TEXT,
+      country TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await db.unsafe(`
+    CREATE INDEX IF NOT EXISTS idx_messages_created_at
+      ON public.messages(created_at DESC);
+  `);
+}
+
+async function createMessage(db, request, payload) {
+  await ensureMessagesSchema(db);
+
+  const normalized = normalizeSubmittedMessage(payload);
+  if (normalized.error) {
+    const err = new Error(normalized.error);
+    err.status = 400;
+    throw err;
+  }
+
+  const pagePath =
+    typeof payload?.page_path === "string" && payload.page_path.trim()
+      ? payload.page_path.trim().slice(0, 255)
+      : null;
+  const country = getClientContext(request).country;
+  const userAgent = request.headers.get("user-agent");
+
+  const rows = await db.unsafe(
+    `
+      INSERT INTO public.messages (message, page_path, country, user_agent)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, created_at;
+    `,
+    [normalized.message, pagePath, country, userAgent]
+  );
+
+  return {
+    id: Number(rows[0].id),
+    created_at: rows[0].created_at,
+  };
+}
+
+async function listMessages(db) {
+  await ensureMessagesSchema(db);
+
+  const rows = await db.unsafe(
+    `
+      SELECT id, message, page_path, country, user_agent, created_at
+      FROM public.messages
+      ORDER BY created_at DESC, id DESC
+      LIMIT 200;
+    `
+  );
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    message: String(row.message),
+    page_path: row.page_path || null,
+    country: row.country || null,
+    user_agent: row.user_agent || null,
+    created_at: row.created_at instanceof Date
+      ? row.created_at.toISOString()
+      : String(row.created_at),
+  }));
+}
+
+async function fetchMessagesPage(request, env) {
+  if (!isMessagesAccessAuthorized(request)) {
+    return messagesAuthRequiredResponse();
+  }
+  if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+    const assetUrl = new URL(request.url);
+    assetUrl.pathname = "/messages.html";
+    return env.ASSETS.fetch(
+      new Request(assetUrl.toString(), {
+        method: "GET",
+        headers: request.headers,
+      })
+    );
+  }
+  return html("<h1>Messages page is unavailable.</h1>", 500);
 }
 
 async function getWinrateRows(db, startRound, endRound, characterName, characterJob) {
@@ -853,6 +1002,10 @@ export default {
     const p = url.pathname;
 
     try {
+      if (p === "/messages" || p === "/messages.html") {
+        return fetchMessagesPage(request, env);
+      }
+
       if (p === "/api/winrates") {
         const start = parseIntParam(url.searchParams.get("start_round"), 10300);
         const end = parseIntParam(url.searchParams.get("end_round"), 10400);
@@ -938,6 +1091,22 @@ export default {
         return json(getClientContext(request));
       }
 
+      if (p === "/api/messages" && request.method === "POST") {
+        const payload = await readJsonBody(request);
+        const created = await withDbRetry(env, (db) =>
+          createMessage(db, request, payload)
+        );
+        return json({ ok: true, message: created }, 201);
+      }
+
+      if (p === "/api/messages" && request.method === "GET") {
+        if (!isMessagesAccessAuthorized(request)) {
+          return messagesAuthRequiredResponse();
+        }
+        const messages = await withDbRetry(env, (db) => listMessages(db));
+        return json({ messages });
+      }
+
       if (p === "/api/notice-acknowledged" && request.method === "POST") {
         const payload = await readJsonBody(request);
         logNoticeAcknowledged(request, payload);
@@ -965,7 +1134,7 @@ export default {
         }
       );
     } catch (err) {
-      return json({ error: String(err?.message || err) }, 500);
+      return json({ error: String(err?.message || err) }, Number(err?.status) || 500);
     }
   },
   async scheduled(controller, env, ctx) {

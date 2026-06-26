@@ -42,11 +42,42 @@ async function fetchClientContext() {
     return payload;
 }
 
+async function submitBannerThoughts() {
+    const message = window.prompt(
+        "Leave a message for daylight.txt. It will be visible on /messages."
+    );
+    if (message === null) {
+        return;
+    }
+
+    const trimmed = message.trim();
+    if (!trimmed) {
+        window.alert("Message not sent. Empty message.");
+        return;
+    }
+
+    const resp = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            message: trimmed,
+            page_path: window.location.pathname
+        })
+    });
+    const payload = await resp.json();
+    if (!resp.ok) {
+        throw new Error(payload.error || "Failed to submit message.");
+    }
+
+    window.alert("Message sent.");
+}
+
 async function initializeNoticeBanner() {
     const banner = document.getElementById("notice-banner");
     const dismissButton = document.getElementById("notice-banner-dismiss");
+    const thoughtsButton = document.getElementById("notice-banner-thoughts");
 
-    if (!banner || !dismissButton) {
+    if (!banner || !dismissButton || !thoughtsButton) {
         return;
     }
 
@@ -65,6 +96,14 @@ async function initializeNoticeBanner() {
     dismissButton.addEventListener("click", () => {
         trackNoticeAcknowledged();
         banner.hidden = true;
+    });
+
+    thoughtsButton.addEventListener("click", async () => {
+        try {
+            await submitBannerThoughts();
+        } catch (err) {
+            window.alert(err.message);
+        }
     });
 }
 

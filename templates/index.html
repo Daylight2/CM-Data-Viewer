@@ -65,6 +65,21 @@
             white-space: nowrap;
         }
 
+        .notice-banner-actions {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        .notice-banner-thoughts {
+            border-color: #ffd8da;
+            background: transparent;
+            color: #fff4f4;
+            white-space: nowrap;
+        }
+
         .wrap {
             max-width: 960px;
             margin: 24px auto;
@@ -311,6 +326,10 @@
             .notice-banner-dismiss {
                 width: 100%;
             }
+
+            .notice-banner-thoughts {
+                width: 100%;
+            }
         }
 
         .footer-note {
@@ -339,7 +358,10 @@
             <p>The game is great, but I encourage players to read the rules closely, including what can and cannot be appealed and how decisions are treated when they go unchallenged.</p>
             <p>I will keep paying for this website out of my own pocket because I appreciate the community, but this message will stay up until someone on staff tells me the reason for the Discord ban. Signed, daylight.txt</p>
         </div>
-        <button type="button" class="notice-banner-dismiss" id="notice-banner-dismiss">I understand</button>
+        <div class="notice-banner-actions">
+            <button type="button" class="notice-banner-dismiss" id="notice-banner-dismiss">I understand</button>
+            <button type="button" class="notice-banner-thoughts" id="notice-banner-thoughts">Give me your thoughts</button>
+        </div>
     </div>
 </div>
 <div class="wrap">

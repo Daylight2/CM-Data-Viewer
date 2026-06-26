@@ -65,6 +65,21 @@
             white-space: nowrap;
         }
 
+        .notice-banner-actions {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        .notice-banner-thoughts {
+            border-color: #ffd8da;
+            background: transparent;
+            color: #fff4f4;
+            white-space: nowrap;
+        }
+
         .wrap {
             max-width: 960px;
             margin: 24px auto;
@@ -311,6 +326,10 @@
             .notice-banner-dismiss {
                 width: 100%;
             }
+
+            .notice-banner-thoughts {
+                width: 100%;
+            }
         }
 
         .footer-note {
@@ -342,7 +361,10 @@
             <p>I'll paste the ban message below. Consider, again, that the worst 'harassment' I've done is one message on my own website telling people to consider the behavior of the moderation team, and to read the rules. That's literally all of it. Haven't insulted anyone, haven't called anyone names, hell, haven't even said the mod team is doing a bad job, just that their rules are overly strict.</p>
             <p>The ban reason is: "Multiple violations of community rules, including harassment and perpetuated harassment of moderation staff. No appeal will be accepted due to the extreme nature of these issues."</p>
         </div>
-        <button type="button" class="notice-banner-dismiss" id="notice-banner-dismiss">I understand</button>
+        <div class="notice-banner-actions">
+            <button type="button" class="notice-banner-dismiss" id="notice-banner-dismiss">I understand</button>
+            <button type="button" class="notice-banner-thoughts" id="notice-banner-thoughts">Give me your thoughts</button>
+        </div>
     </div>
 </div>
 <div class="wrap">
