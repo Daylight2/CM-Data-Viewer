@@ -44,7 +44,7 @@ async function fetchClientContext() {
 
 async function submitBannerThoughts() {
     const message = window.prompt(
-        "Leave a message for daylight.txt. It will be visible on /messages."
+        "Leave a message"
     );
     if (message === null) {
         return;
