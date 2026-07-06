@@ -110,7 +110,6 @@
         </div>
         <div class="notice-banner-actions">
             <button type="button" id="notice-banner-dismiss">I understand</button>
-            <button type="button" class="alt-button" id="notice-banner-thoughts">Give me your thoughts</button>
             <button type="button" class="alt-button" id="notice-banner-board">Read message board</button>
         </div>
     </div>
@@ -119,43 +118,8 @@
     <p><a href="/">Back to dashboard</a></p>
 </div>
 <script>
-async function submitBannerThoughts() {
-    const message = window.prompt(
-        "Leave a message for daylight.txt. It will be visible on /messages."
-    );
-    if (message === null) {
-        return;
-    }
-
-    const trimmed = message.trim();
-    if (!trimmed) {
-        window.alert("Message not sent. Empty message.");
-        return;
-    }
-
-    const resp = await fetch("/api/messages", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: trimmed })
-    });
-    const payload = await resp.json();
-    if (!resp.ok) {
-        throw new Error(payload.error || "Failed to submit message.");
-    }
-
-    window.alert("Message sent.");
-}
-
 document.getElementById("notice-banner-dismiss").addEventListener("click", () => {
     document.getElementById("notice-banner").hidden = true;
-});
-
-document.getElementById("notice-banner-thoughts").addEventListener("click", async () => {
-    try {
-        await submitBannerThoughts();
-    } catch (err) {
-        window.alert(err.message);
-    }
 });
 
 document.getElementById("notice-banner-board").addEventListener("click", () => {
